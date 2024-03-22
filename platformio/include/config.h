@@ -33,11 +33,13 @@
 // #define DISP_7C_F
 // #define DISP_BW_V1
 
+// 墨水屏驱动板
 // E-PAPER DRIVER BOARD
 // Uncomment the macro that identifies your driver board hardware.
 #define DRIVER_DESPI_C02
 // #define DRIVER_WAVESHARE
 
+// 3色墨水屏重点颜色选择
 // 3 COLOR E-INK ACCENT COLOR
 // Defines the 3rd color to be used when a 3+ color display is selected.
 #if defined(DISP_3C_B) || defined(DISP_7C_F)
@@ -49,46 +51,52 @@
   // #define ACCENT_COLOR GxEPD_ORANGE
 #endif
 
+// 本地化（语言选择）
 // LOCALE
 // If your locale is not here, you can add it by copying and modifying one of
 // the files in src/locales. Please feel free to create a pull request to add
 // official support for your locale.
-//   Language (Territory)            code
-//   German (Germany)                de_DE
-//   English (United Kingdom)        en_GB
-//   English (United States)         en_US
-//   French (France)                 fr_FR
-//   Dutch (Belgium)                 nl_BE
-//   Portuguese (Brazil)             pt_BR
+//   Language (Territory)                   code
+//   German (Germany)                       de_DE
+//   English (United Kingdom)               en_GB
+//   English (United States)                en_US
+//   French (France)                        fr_FR
+//   Dutch (Belgium)                        nl_BE
+//   Portuguese (Brazil)                    pt_BR
+//   Chinese Simplified (Mainland China)    zh_CN
 #define LOCALE en_US
 
+// 单位制
 // UNITS
 // Define exactly one macro for each measurement type below.
 
+// 温度单位
 // UNITS - TEMPERATURE
 //   Metric   : Celsius
 //   Imperial : Fahrenheit
 // #define UNITS_TEMP_KELVIN
-// #define UNITS_TEMP_CELSIUS
-#define UNITS_TEMP_FAHRENHEIT
+#define UNITS_TEMP_CELSIUS
+// #define UNITS_TEMP_FAHRENHEIT
 
+// 风速单位
 // UNITS - WIND SPEED
 //   Metric   : Kilometers per Hour
 //   Imperial : Miles per Hour
-// #define UNITS_SPEED_METERSPERSECOND
+#define UNITS_SPEED_METERSPERSECOND
 // #define UNITS_SPEED_FEETPERSECOND
 // #define UNITS_SPEED_KILOMETERSPERHOUR
-#define UNITS_SPEED_MILESPERHOUR
+// #define UNITS_SPEED_MILESPERHOUR
 // #define UNITS_SPEED_KNOTS
 // #define UNITS_SPEED_BEAUFORT
 
+// 气压单位
 // UNITS - PRESSURE
 //   Metric   : Millibars
 //   Imperial : Inches of Mercury
-// #define UNITS_PRES_HECTOPASCALS
+#define UNITS_PRES_HECTOPASCALS
 // #define UNITS_PRES_PASCALS
 // #define UNITS_PRES_MILLIMETERSOFMERCURY
-#define UNITS_PRES_INCHESOFMERCURY
+// #define UNITS_PRES_INCHESOFMERCURY
 // #define UNITS_PRES_MILLIBARS
 // #define UNITS_PRES_ATMOSPHERES
 // #define UNITS_PRES_GRAMSPERSQUARECENTIMETER
@@ -105,8 +113,8 @@
 // This can either be Probability of Precipitation (PoP) or hourly volume.
 //   Metric   : Millimeters
 //   Imperial : Inches
-#define UNITS_PRECIP_POP
-// #define UNITS_PRECIP_MILLIMETERS
+// #define UNITS_PRECIP_POP
+#define UNITS_PRECIP_MILLIMETERS
 // #define UNITS_PRECIP_CENTIMETERS
 // #define UNITS_PRECIP_INCHES
 
@@ -120,7 +128,7 @@
 //   HONG_KONG_AQHI       INDIA_AQI            MAINLAND_CHINA_AQI
 //   SINGAPORE_PSI        SOUTH_KOREA_CAI      UNITED_KINGDOM_DAQI
 //   UNITED_STATES_AQI
-#define UNITED_STATES_AQI
+#define MAINLAND_CHINA_AQI
 
 // Hypertext Transfer Protocol (HTTP)
 // HTTP
@@ -180,9 +188,9 @@
 // Uncomment your preferred wind level direction precision.
 // #define WIND_ICONS_CARDINAL
 // #define WIND_ICONS_INTERCARDINAL
-#define WIND_ICONS_SECONDARY_INTERCARDINAL
+// #define WIND_ICONS_SECONDARY_INTERCARDINAL
 // #define WIND_ICONS_TERTIARY_INTERCARDINAL
-// #define WIND_ICONS_360
+#define WIND_ICONS_360
 
 // FONTS
 // A handful of popular Open Source typefaces have been included with this
