@@ -86,10 +86,10 @@ const char *TXT_UV_VERY_HIGH = "很强";
 const char *TXT_UV_EXTREME   = "极强";
 
 // WIFI
-const char *TXT_WIFI_EXCELLENT     = "极强";
-const char *TXT_WIFI_GOOD          = "强";
-const char *TXT_WIFI_FAIR          = "中等";
-const char *TXT_WIFI_WEAK          = "弱";
+const char *TXT_WIFI_EXCELLENT     = "信号极强";
+const char *TXT_WIFI_GOOD          = "信号强";
+const char *TXT_WIFI_FAIR          = "信号中等";
+const char *TXT_WIFI_WEAK          = "信号弱";
 const char *TXT_WIFI_NO_CONNECTION = "无连接";
 
 // UNIT SYMBOLS - TEMPERATURE
@@ -113,8 +113,8 @@ const char *TXT_UNITS_PRES_ATMOSPHERES              = "atm";
 const char *TXT_UNITS_PRES_GRAMSPERSQUARECENTIMETER = "g/cm\262";
 const char *TXT_UNITS_PRES_POUNDSPERSQUAREINCH      = "lb/in\262";
 // UNITS - VISIBILITY DISTANCE
-const char *TXT_UNITS_DIST_KILOMETERS = "km";
-const char *TXT_UNITS_DIST_MILES      = "mi";
+const char *TXT_UNITS_DIST_KILOMETERS = "千米";
+const char *TXT_UNITS_DIST_MILES      = "米";
 
 // MISCELLANEOUS MESSAGES
 // Title Case

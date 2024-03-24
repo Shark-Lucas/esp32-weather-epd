@@ -22,6 +22,7 @@
 #include "config.h"
 #include "conversions.h"
 #include "display_utils.h"
+#include "MyGxEPD2_BW.h"
 
 // fonts
 #include FONT_HEADER
@@ -38,7 +39,7 @@
 #include "icons/icons_196x196.h"
 
 #ifdef DISP_BW_V2
-  GxEPD2_BW<GxEPD2_750_T7,
+  MyGxEPD2_BW<GxEPD2_750_T7,
             GxEPD2_750_T7::HEIGHT> display(
     GxEPD2_750_T7(PIN_EPD_CS,
                   PIN_EPD_DC,
@@ -639,6 +640,10 @@ void drawCurrentConditions(const owm_current_t &current,
   return;
 } // end drawCurrentConditions
 
+
+
+
+// 绘制五天内的天气预报
 /* This function is responsible for drawing the five day forecast.
  */
 void drawForecast(owm_daily_t *const daily, tm timeInfo)
@@ -689,6 +694,8 @@ void drawForecast(owm_daily_t *const daily, tm timeInfo)
   return;
 } // end drawForecast
 
+
+// 画天气预警，最多能画两个
 /* This function is responsible for drawing the current alerts if any.
  * Up to 2 alerts can be drawn.
  */
@@ -801,6 +808,8 @@ void drawAlerts(std::vector<owm_alerts_t> &alerts,
   return;
 } // end drawAlerts
 
+
+// 该函数负责在右上角绘制城市字符串和日期信息。
 /* This function is responsible for drawing the city string and date
  * information in the top right corner.
  */
@@ -814,6 +823,11 @@ void drawLocationDate(const String &city, const String &date)
   return;
 } // end drawLocationDate
 
+
+/* C++ 中的 % 运算符不是真正的模运算符，而是一个
+ * 余数运算符。余数运算符和模数运算符等价
+ * 对于正数来说是等价的，但对于负数来说不是。下面是
+ * 调制运算符适用于 +/-a 和 +b。
 /* The % operator in C++ is not a true modulo operator but it instead a
  * remainder operator. The remainder operator and modulo operator are equivalent
  * for positive numbers, but not for negatives. The follow implementation of the
@@ -825,6 +839,9 @@ inline int modulo(int a, int b)
   return result >= 0 ? result : result + b;
 }
 
+
+/* 该函数负责绘制指定小时数（最多 47 小时）的展望图。
+ */
 /* This function is responsible for drawing the outlook graph for the specified
  * number of hours(up to 47).
  */
@@ -1110,6 +1127,9 @@ void drawOutlookGraph(owm_hourly_t *const hourly, tm timeInfo)
   return;
 } // end drawOutlookGraph
 
+
+
+// 画底部状态栏
 /* This function is responsible for drawing the status bar along the bottom of
  * the display.
  */
