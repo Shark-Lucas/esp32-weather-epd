@@ -167,7 +167,7 @@ bool waitForSNTPSync(tm *timeInfo)
   uri += "&appid=" + OWM_APIKEY;
 
   Serial.print(TXT_ATTEMPTING_HTTP_REQ);
-  Serial.println(": " + sanitizedUri);
+  Serial.println(": " + uri);
   int httpResponse = 0;
   while (!rxSuccess && attempts < 3)
   {

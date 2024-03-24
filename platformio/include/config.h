@@ -64,7 +64,7 @@
 //   Dutch (Belgium)                        nl_BE
 //   Portuguese (Brazil)                    pt_BR
 //   Chinese Simplified (Mainland China)    zh_CN
-#define LOCALE en_US
+#define LOCALE zh_CN
 
 // 单位制
 // UNITS
@@ -220,7 +220,7 @@
 //   FreeSans font, but this project supports the ability to modularly swap
 //   fonts. Using a font other than FreeSans may result in undesired spacing or
 //   other artifacts.
-#define FONT_HEADER "fonts/FreeSans.h"
+#define FONT_HEADER "fonts/Dengb.h"
 
 // ALERTS
 //   The handling of alerts is complex. Each country has a unique national alert
@@ -234,8 +234,8 @@
 // STATUS BAR EXTRAS
 //   Extra information that can be displayed on the status bar. Set to 1 to
 //   enable.
-#define STATUS_BAR_EXTRAS_BAT_VOLTAGE 0
-#define STATUS_BAR_EXTRAS_WIFI_RSSI   0
+#define STATUS_BAR_EXTRAS_BAT_VOLTAGE 1
+#define STATUS_BAR_EXTRAS_WIFI_RSSI   1
 
 // BATTERY MONITORING
 //   You may choose to power your whether display with or without a battery.
