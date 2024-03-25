@@ -253,7 +253,8 @@ void setup()
   WiFiClientSecure client;
   client.setCACert(cert_Sectigo_RSA_Domain_Validation_Secure_Server_CA);
 #endif
-  int rxStatus = getOWMonecall(client, owm_onecall);
+
+  int rxStatus = getCYWeather(client, owm_onecall, owm_air_pollution);
   if (rxStatus != HTTP_CODE_OK)
   {
     killWiFi();
@@ -267,6 +268,8 @@ void setup()
     powerOffDisplay();
     beginDeepSleep(startTime, &timeInfo);
   }
+  
+  /*
   rxStatus = getOWMairpollution(client, owm_air_pollution);
   if (rxStatus != HTTP_CODE_OK)
   {
@@ -281,6 +284,8 @@ void setup()
     powerOffDisplay();
     beginDeepSleep(startTime, &timeInfo);
   }
+  */
+
   killWiFi(); // WiFi no longer needed
 
   // GET INDOOR TEMPERATURE AND HUMIDITY, start BME280...
@@ -333,9 +338,7 @@ void setup()
     drawForecast(owm_onecall.daily, timeInfo);
     drawLocationDate(CITY_STRING, dateStr);
     drawOutlookGraph(owm_onecall.hourly, timeInfo);
-#if DISPLAY_ALERTS
     drawAlerts(owm_onecall.alerts, CITY_STRING, dateStr);
-#endif
     drawStatusBar(statusStr, refreshTimeStr, wifiRSSI, batteryVoltage);
   } while (display.nextPage());
   powerOffDisplay();
