@@ -68,6 +68,13 @@ const String OWM_ENDPOINT = "api.openweathermap.org";
 //   calls.
 const String OWM_ONECALL_VERSION = "3.0";
 
+
+// 彩云天气 API
+// 彩云天气 API key, https://platform.caiyunapp.com
+const String CY_APIKEY       = "";
+const String CY_ENDPOINT     = "api.caiyunapp.com";
+const String CY_API_VERSION  = "v2.6";
+
 // LOCATION
 // Set your latitude and longitude.
 // (used to get weather data as part of API requests to OpenWeatherMap)
@@ -93,12 +100,12 @@ const char *HOUR_FORMAT = "%H";      // 24-hour ex: 01   23
 // Date format used when displaying date in top-right corner.
 // For more information about formatting see
 // https://man7.org/linux/man-pages/man3/strftime.3.html
-const char *DATE_FORMAT = "%a, %B %e"; // ex: Sat, January 1
+const char *DATE_FORMAT = "%B%e日 %a"; // ex: Sat, January 1
 // Date/Time format used when displaying the last refresh time along the bottom
 // of the screen.
 // For more information about formatting see
 // https://man7.org/linux/man-pages/man3/strftime.3.html
-const char *REFRESH_TIME_FORMAT = "%x %H:%M";
+const char *REFRESH_TIME_FORMAT = "%y/%m/%d %H:%M";
 // NTP_SERVER_1 is the primary time server, while NTP_SERVER_2 is a fallback.
 // pool.ntp.org will find the closest available NTP server to you.
 const char *NTP_SERVER_1 = "pool.ntp.org";
