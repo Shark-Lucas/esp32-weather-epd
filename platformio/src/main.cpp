@@ -37,6 +37,8 @@
   #include "cert.h"
 #endif
 
+#include "api/caiyun.h"
+
 // too large to allocate locally on stack
 static owm_resp_onecall_t       owm_onecall;
 static owm_resp_air_pollution_t owm_air_pollution;
