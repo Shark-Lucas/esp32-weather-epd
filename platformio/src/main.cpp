@@ -256,7 +256,7 @@ void setup()
   client.setCACert(cert_Sectigo_RSA_Domain_Validation_Secure_Server_CA);
 #endif
 
-  int rxStatus = getCYWeather(client, owm_onecall, owm_air_pollution);
+  int rxStatus = getCYWeather(client, owm_onecall);
   if (rxStatus != HTTP_CODE_OK)
   {
     killWiFi();
@@ -270,7 +270,7 @@ void setup()
     powerOffDisplay();
     beginDeepSleep(startTime, &timeInfo);
   }
-  
+  Serial.println(14);
   /*
   rxStatus = getOWMairpollution(client, owm_air_pollution);
   if (rxStatus != HTTP_CODE_OK)
@@ -330,17 +330,22 @@ void setup()
   getRefreshTimeStr(refreshTimeStr, timeConfigured, &timeInfo);
   String dateStr;
   getDateStr(dateStr, &timeInfo);
-
+  Serial.println(15);
   // RENDER FULL REFRESH
   initDisplay();
   do
   {
-    drawCurrentConditions(owm_onecall.current, owm_onecall.daily[0],
-                          owm_air_pollution, inTemp, inHumidity);
+    Serial.println(16);
+    drawCurrentConditions(owm_onecall.current, owm_onecall.daily[0], owm_air_pollution, inTemp, inHumidity);
+    Serial.println(17);
     drawForecast(owm_onecall.daily, timeInfo);
-    drawLocationDate(CITY_STRING, dateStr);
+    Serial.println(18);
+    drawLocationDate(owm_onecall.city_name, dateStr);
+    Serial.println(19);
     drawOutlookGraph(owm_onecall.hourly, timeInfo);
+    Serial.println(20);
     drawAlerts(owm_onecall.alerts, CITY_STRING, dateStr);
+    Serial.println(21);
     drawStatusBar(statusStr, refreshTimeStr, wifiRSSI, batteryVoltage);
   } while (display.nextPage());
   powerOffDisplay();

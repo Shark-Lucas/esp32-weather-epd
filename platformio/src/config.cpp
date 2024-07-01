@@ -71,15 +71,15 @@ const String OWM_ONECALL_VERSION = "3.0";
 
 // 彩云天气 API
 // 彩云天气 API key, https://platform.caiyunapp.com
-const String CY_APIKEY       = "";
+const String CY_APIKEY       = "3jPlVTQefXq1UCyc";
 const String CY_ENDPOINT     = "api.caiyunapp.com";
 const String CY_API_VERSION  = "v2.6";
 
 // LOCATION
 // Set your latitude and longitude.
 // (used to get weather data as part of API requests to OpenWeatherMap)
-const String LAT = "30.4583";
-const String LON = "114.3882";
+const String LAT = "31.1376";
+const String LON = "121.3218";
 // City name that will be shown in the top-right corner of the display.
 const String CITY_STRING = "武汉";
 
@@ -100,7 +100,7 @@ const char *HOUR_FORMAT = "%H";      // 24-hour ex: 01   23
 // Date format used when displaying date in top-right corner.
 // For more information about formatting see
 // https://man7.org/linux/man-pages/man3/strftime.3.html
-const char *DATE_FORMAT = "%B%e日 %a"; // ex: Sat, January 1
+const char *DATE_FORMAT = "%B%e 日 %A"; // ex: Sat, January 1
 // Date/Time format used when displaying the last refresh time along the bottom
 // of the screen.
 // For more information about formatting see

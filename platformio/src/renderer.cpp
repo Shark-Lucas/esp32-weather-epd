@@ -104,6 +104,8 @@ void drawString(int16_t x, int16_t y, const String &text, alignment_t alignment,
   uint16_t w, h;
   display.setTextColor(color);
   display.getTextBounds(text, x, y, &x1, &y1, &w, &h);
+  Serial.printf("text = %s\n", text);
+  Serial.printf("w = %d, h = %d\n", w, h);
   if (alignment == RIGHT)
   {
     x = x - w;
@@ -472,11 +474,11 @@ void drawCurrentConditions(const owm_current_t &current,
 #if defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
   // air quality index
   display.setFont(&FONT_12pt8b);
-  int aqi = getAQI(owm_air_pollution);
-  dataStr = String(aqi);
+//   int aqi = getAQI(owm_air_pollution);
+  dataStr = String(current.aqi);
   drawString(48, 204 + 17 / 2 + (48 + 8) * 3 + 48 / 2, dataStr, LEFT);
   display.setFont(&FONT_7pt8b);
-  dataStr = String(getAQIdesc(aqi));
+  dataStr = String(getAQIdesc(current.aqi));
   max_w = 170 - (display.getCursorX() + sp);
   if (getStringWidth(dataStr) <= max_w)
   { // Fits on a single line, draw along bottom
@@ -609,12 +611,12 @@ void drawCurrentConditions(const owm_current_t &current,
   {
     dataStr = String(static_cast<int>(round(vis)));
   }
-#ifdef UNITS_DIST_KILOMETERS
-  if (vis >= 10) {
+#if defined(UNITS_DIST_KILOMETERS)
+  if (vis >= 10) 
+#elif defined(UNITS_DIST_MILES)
+  if (vis >= 6) 
 #endif
-#ifdef UNITS_DIST_MILES
-  if (vis >= 6) {
-#endif
+  {
     dataStr = "> " + dataStr;
   }
   drawString(170 + 48, 204 + 17 / 2 + (48 + 8) * 3 + 48 / 2, dataStr, LEFT);
@@ -636,6 +638,7 @@ void drawCurrentConditions(const owm_current_t &current,
   display.setFont(&FONT_8pt8b);
   drawString(display.getCursorX(), 204 + 17 / 2 + (48 + 8) * 4 + 48 / 2,
              "%", LEFT);
+
 #endif // defined(DISP_BW_V2) || defined(DISP_3C_B) || defined(DISP_7C_F)
   return;
 } // end drawCurrentConditions
@@ -817,9 +820,12 @@ void drawLocationDate(const String &city, const String &date)
 {
   // location, date
   display.setFont(&FONT_16pt8b);
+  Serial.printf("city = %s\n", city.c_str());
+  Serial.printf("display.gfxFont->ch_count = %d\n", display.gfxFont->ch_count);
+  
   drawString(DISP_WIDTH - 2, 23, city, RIGHT, ACCENT_COLOR);
   display.setFont(&FONT_12pt8b);
-  drawString(DISP_WIDTH - 2, 30 + 4 + 17, date, RIGHT);
+  drawString(DISP_WIDTH - 10, 30 + 4 + 17, date, RIGHT);
   return;
 } // end drawLocationDate
 
@@ -857,11 +863,11 @@ void drawOutlookGraph(owm_hourly_t *const hourly, tm timeInfo)
   const int yPos0 = 216;
   const int yPos1 = DISP_HEIGHT - 46;
 
-  // x axis
+  // 画 X 轴
   display.drawLine(xPos0, yPos1    , xPos1, yPos1    , GxEPD_BLACK);
   display.drawLine(xPos0, yPos1 - 1, xPos1, yPos1 - 1, GxEPD_BLACK);
 
-  // calculate y max/min and intervals
+  // 计算 Y 轴 最大值 最小值 及 间隔
   int yMajorTicks = 5;
 #ifdef UNITS_TEMP_KELVIN
   float tempMin = hourly[0].temp;
@@ -895,19 +901,14 @@ void drawOutlookGraph(owm_hourly_t *const hourly, tm timeInfo)
     precipMax = std::max<float>(precipMax, hourly[i].rain_1h + hourly[i].snow_1h);
 #endif
   }
-  int tempBoundMin = static_cast<int>(tempMin - 1)
-                      - modulo(static_cast<int>(tempMin - 1), yTempMajorTicks);
-  int tempBoundMax = static_cast<int>(tempMax + 1)
-   + (yTempMajorTicks - modulo(static_cast<int>(tempMax + 1), yTempMajorTicks));
-
+  int tempBoundMin = static_cast<int>(tempMin - 1) - modulo(static_cast<int>(tempMin - 1), yTempMajorTicks);
+  int tempBoundMax = static_cast<int>(tempMax + 1) + (yTempMajorTicks - modulo(static_cast<int>(tempMax + 1), yTempMajorTicks));
   // while we have to many major ticks then increase the step
   while ((tempBoundMax - tempBoundMin) / yTempMajorTicks > yMajorTicks)
   {
     yTempMajorTicks += 5;
-    tempBoundMin = static_cast<int>(tempMin - 1)
-                      - modulo(static_cast<int>(tempMin - 1), yTempMajorTicks);
-    tempBoundMax = static_cast<int>(tempMax + 1) + (yTempMajorTicks
-                      - modulo(static_cast<int>(tempMax + 1), yTempMajorTicks));
+    tempBoundMin = static_cast<int>(tempMin - 1) - modulo(static_cast<int>(tempMin - 1), yTempMajorTicks);
+    tempBoundMax = static_cast<int>(tempMax + 1) + (yTempMajorTicks - modulo(static_cast<int>(tempMax + 1), yTempMajorTicks));
   }
   // while we have not enough major ticks add to either bound
   while ((tempBoundMax - tempBoundMin) / yTempMajorTicks < yMajorTicks)
@@ -1019,8 +1020,7 @@ void drawOutlookGraph(owm_hourly_t *const hourly, tm timeInfo)
   }
 
   int xMaxTicks = 8;
-  int hourInterval = static_cast<int>(ceil(HOURLY_GRAPH_MAX
-                                           / static_cast<float>(xMaxTicks)));
+  int hourInterval = static_cast<int>(ceil(HOURLY_GRAPH_MAX / static_cast<float>(xMaxTicks)));
   float xInterval = (xPos1 - xPos0 - 1) / static_cast<float>(HOURLY_GRAPH_MAX);
   display.setFont(&FONT_8pt8b);
   for (int i = 0; i < HOURLY_GRAPH_MAX; ++i)

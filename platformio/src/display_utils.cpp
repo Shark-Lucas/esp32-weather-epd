@@ -20,6 +20,8 @@
 #include <Arduino.h>
 #include <driver/adc.h>
 #include <esp_adc_cal.h>
+#include <unordered_map>
+#include <string.h>
 
 #include <aqi.h>
 
@@ -620,6 +622,62 @@ const uint8_t *getForecastBitmap64(const owm_daily_t &daily)
   bool windy = (daily.wind_speed >= 32.2 /*m/s*/
              || daily.wind_gust  >= 40.2 /*m/s*/);
 
+  const uint8_t *bitmap;
+
+  std::string str = daily.weather.skycon.c_str();
+  std::unordered_map<std::string, std::function<void()>> cases;
+
+  // TODO: 添加夜间判断
+  // 晴（白天）
+  cases["CLEAR_DAY"]            = [&bitmap]() { bitmap = wi_day_sunny_64x64; };                   
+  // 晴（夜间）
+  cases["CLEAR_NIGHT"]          = [&bitmap]() { bitmap = wi_night_clear_64x64; };                 
+  // 多云（白天）
+  cases["PARTLY_CLOUDY_DAY"]    = [&bitmap]() { bitmap = wi_day_cloudy_64x64; };                  
+  // 多云（夜间）
+  cases["PARTLY_CLOUDY_NIGHT"]  = [&bitmap]() { bitmap = wi_night_alt_cloudy_64x64; };            
+  // 阴
+  cases["CLOUDY"]               = [&bitmap]() { bitmap = wi_cloudy_64x64; };                      
+  // 轻度雾霾
+  cases["LIGHT_HAZE"]           = [&bitmap]() { bitmap = wi_dust_64x64; };                        
+  // 中度雾霾
+  cases["MODERATE_HAZE"]        = [&bitmap]() { bitmap = wi_dust_64x64; };                        
+  // 重度雾霾
+  cases["HEAVY_HAZE"]           = [&bitmap]() { bitmap = wi_dust_64x64; };                        
+  // 小雨
+  cases["LIGHT_RAIN"]           = [&bitmap]() { bitmap = wi_day_rain_64x64; };                    
+  // 中雨
+  cases["MODERATE_RAIN"]        = [&bitmap]() { bitmap = wi_day_rain_64x64; };                    
+  // 大雨
+  cases["HEAVY_RAIN"]           = [&bitmap]() { bitmap = wi_day_rain_64x64; };                    
+  // 暴雨
+  cases["STORM_RAIN"]           = [&bitmap]() { bitmap = wi_day_rain_64x64; };                    
+  // 雾
+  cases["FOG"]                  = [&bitmap]() { bitmap = wi_day_fog_64x64; };                     
+  // 小雪
+  cases["LIGHT_SNOW"]           = [&bitmap]() { bitmap = wi_day_snow_64x64; };                    
+  // 中雪
+  cases["MODERATE_SNOW"]        = [&bitmap]() { bitmap = wi_day_snow_64x64; };                    
+  // 大雪
+  cases["HEAVY_SNOW"]           = [&bitmap]() { bitmap = wi_day_snow_64x64; };                    
+  // 暴雪
+  cases["STORM_SNOW"]           = [&bitmap]() { bitmap = wi_day_snow_64x64; };                    
+  // 浮尘
+  cases["DUST"]                 = [&bitmap]() { bitmap = wi_sandstorm_64x64; };                   
+  // 沙尘
+  cases["SAND"]                 = [&bitmap]() { bitmap = wi_sandstorm_64x64; };                   
+  // 大风
+  cases["WIND"]                 = [&bitmap]() { bitmap = wi_cloudy_gusts_64x64; };                
+
+  // 判断
+  if (cases.find(str) != cases.end())
+  {
+    cases[str](); // 调用与字符串对应的函数
+  }
+
+  return bitmap;
+  // 下面是原逻辑，彩云不支持这么多模式，就用上面的直接下面的不要了
+
   switch (id)
   {
   // Group 2xx: Thunderstorm
@@ -696,8 +754,8 @@ const uint8_t *getForecastBitmap64(const owm_daily_t &daily)
     return wi_smoke_64x64;
   case 721: // Haze          Haze                             50d
     return wi_day_haze_64x64;
-    if (!cloudy) {return wi_day_haze_196x196;}
-    return wi_dust_196x196;
+    if (!cloudy) {return wi_day_haze_64x64;}
+    return wi_dust_64x64;
   case 731: // Dust          sand/dust whirls                 50d
     return wi_sandstorm_64x64;
   case 741: // Fog           fog                              50d
@@ -759,15 +817,69 @@ const uint8_t *getCurrentConditionsBitmap196(const owm_current_t &current,
                                              const owm_daily_t   &today)
 {
   int id = current.weather.id;
-  // OpenWeatherMap indicates sun is up with d otherwise n for night
-  bool day = current.weather.icon.endsWith("d");
-  // moon is out if current time is after moonrise but before moonset
-  // OR if moonrises after moonset and the current time is after moonrise
-  bool moon = (current.dt >= today.moonrise && current.dt < today.moonset)
-           || (today.moonrise > today.moonset && current.dt >= today.moonrise);
+  // 当前时间在日出和日落之间则为白天
+  bool day = ((current.dt >= today.sunrise) && (current.dt <= today.sunset));
+  // 当前时间小于日出或大于日落则为晚上
+  bool moon = ((current.dt < today.sunrise) || (current.dt > today.sunset));
+
   bool cloudy = current.clouds > 60.25; // partly cloudy / partly sunny
-  bool windy = (current.wind_speed >= 32.2 /*m/s*/
-             || current.wind_gust  >= 40.2 /*m/s*/);
+  bool windy = current.wind_speed >= 32.2;
+
+  const uint8_t *bitmap;
+
+  std::string str = current.weather.skycon.c_str();
+  std::unordered_map<std::string, std::function<void()>> cases;
+
+  // TODO: 添加夜间判断
+  // 晴（白天）
+  cases["CLEAR_DAY"]            = [&bitmap]() { bitmap = wi_day_sunny_196x196; };                   
+  // 晴（夜间）
+  cases["CLEAR_NIGHT"]          = [&bitmap]() { bitmap = wi_night_clear_196x196; };                 
+  // 多云（白天）
+  cases["PARTLY_CLOUDY_DAY"]    = [&bitmap]() { bitmap = wi_day_cloudy_196x196; };                  
+  // 多云（夜间）
+  cases["PARTLY_CLOUDY_NIGHT"]  = [&bitmap]() { bitmap = wi_night_alt_cloudy_196x196; };            
+  // 阴
+  cases["CLOUDY"]               = [&bitmap]() { bitmap = wi_cloudy_196x196; };                      
+  // 轻度雾霾
+  cases["LIGHT_HAZE"]           = [&bitmap]() { bitmap = wi_dust_196x196; };                        
+  // 中度雾霾
+  cases["MODERATE_HAZE"]        = [&bitmap]() { bitmap = wi_dust_196x196; };                        
+  // 重度雾霾
+  cases["HEAVY_HAZE"]           = [&bitmap]() { bitmap = wi_dust_196x196; };                        
+  // 小雨
+  cases["LIGHT_RAIN"]           = [&bitmap, day]() { bitmap = day ? wi_day_rain_196x196 : wi_night_alt_rain_196x196; };                    
+  // 中雨
+  cases["MODERATE_RAIN"]        = [&bitmap, day]() { bitmap = day ? wi_day_rain_196x196 : wi_night_alt_rain_196x196; };                    
+  // 大雨
+  cases["HEAVY_RAIN"]           = [&bitmap, day]() { bitmap = day ? wi_day_rain_196x196 : wi_night_alt_rain_196x196; };                    
+  // 暴雨
+  cases["STORM_RAIN"]           = [&bitmap, day]() { bitmap = day ? wi_day_rain_196x196 : wi_night_alt_rain_196x196; };                    
+  // 雾
+  cases["FOG"]                  = [&bitmap, day]() { bitmap = day ? wi_day_fog_196x196 : wi_night_fog_196x196; };                     
+  // 小雪
+  cases["LIGHT_SNOW"]           = [&bitmap, day]() { bitmap = day ? wi_day_snow_196x196 : wi_night_alt_snow_196x196; };                    
+  // 中雪
+  cases["MODERATE_SNOW"]        = [&bitmap, day]() { bitmap = day ? wi_day_snow_196x196 : wi_night_alt_snow_196x196; };                    
+  // 大雪
+  cases["HEAVY_SNOW"]           = [&bitmap, day]() { bitmap = day ? wi_day_snow_196x196 : wi_night_alt_snow_196x196; };                    
+  // 暴雪
+  cases["STORM_SNOW"]           = [&bitmap, day]() { bitmap = day ? wi_day_snow_196x196 : wi_night_alt_snow_196x196; };                    
+  // 浮尘
+  cases["DUST"]                 = [&bitmap]() { bitmap = wi_sandstorm_196x196; };                   
+  // 沙尘
+  cases["SAND"]                 = [&bitmap]() { bitmap = wi_sandstorm_196x196; };                   
+  // 大风
+  cases["WIND"]                 = [&bitmap]() { bitmap = wi_cloudy_gusts_196x196; };                
+
+  // 判断
+  if (cases.find(str) != cases.end())
+  {
+    cases[str](); // 调用与字符串对应的函数
+  }
+
+  return bitmap;
+  // 下面是原逻辑，彩云不支持这么多模式，就用上面的直接下面的不要了
 
   switch (id)
   {

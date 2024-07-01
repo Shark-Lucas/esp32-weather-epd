@@ -43,7 +43,7 @@ const char *LC_AM_STR      = "AM";
 // PM_STR                  Post Meridian affix
 const char *LC_PM_STR      = "PM";
 // DAY_{1-7}               name of the n-th day of the week
-const char *LC_DAY[7]      = {"周日", "周一", "周二", "周三", "周四", "周五", "周六"};
+const char *LC_DAY[7]      = {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"};
 // ABDAY_{1-7}             abbreviated name of the n-th day of the week
 const char *LC_ABDAY[7]    = {"周日", "周一", "周二", "周三", "周四", "周五", "周六"};
 // MON_{1-12}              name of the n-th month of the year

@@ -37,6 +37,7 @@ typedef struct owm_weather
   String  main;             // Group of weather parameters (Rain, Snow, Extreme etc.)
   String  description;      // Weather condition within the group (full list of weather conditions). Get the output in your language
   String  icon;             // Weather icon id.
+  String  skycon;
 } owm_weather_t;
 
 /*
@@ -84,6 +85,7 @@ typedef struct owm_current
   int     wind_deg;         // Wind direction, degrees (meteorological)
   float   rain_1h;          // (where available) Rain volume for last hour, mm
   float   snow_1h;          // (where available) Snow volume for last hour, mm
+  int     aqi;
   owm_weather_t         weather;
 } owm_current_t;
 
@@ -170,6 +172,7 @@ typedef struct owm_resp_onecall
   float   lat;              // Geographical coordinates of the location (latitude)
   float   lon;              // Geographical coordinates of the location (longitude)
   String  timezone;         // Timezone name for the requested location
+  String  city_name;        // 城市名（城市+区）
   int     timezone_offset;  // Shift in seconds from UTC
   owm_current_t   current;
   // owm_minutely_t  minutely[OWM_NUM_MINUTELY];
