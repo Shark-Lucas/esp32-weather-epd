@@ -1,5 +1,6 @@
 #ifndef __FONTS_FZCH_H__
 #define __FONTS_FZCH_H__
+#define GFXfont ChineseGFXfont
 #include "FZCH/FZCH_10pt8b.h"
 #include "FZCH/FZCH_11pt8b.h"
 #include "FZCH/FZCH_12pt8b.h"
@@ -17,6 +18,7 @@
 #include "FZCH/FZCH_7pt8b.h"
 #include "FZCH/FZCH_8pt8b.h"
 #include "FZCH/FZCH_9pt8b.h"
+#undef GFXfont
 
 #define FONT_10pt8b FZCH_10pt8b
 #define FONT_11pt8b FZCH_11pt8b

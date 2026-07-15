@@ -7,6 +7,23 @@
 #include <GxEPD2_BW.h>
 #include <Adafruit_GFX.h>
 
+// 修改中文字体结构体
+struct ChineseGFXfont : public GFXfont
+{
+    uint16_t *unicode_map;                         // unicode字符映射表
+    uint16_t ch_count;                             // 字符数量
+    static const uint8_t CHINESE_FONT_FLAG = 0xFF; // 用特殊值标记中文字体
+
+    constexpr ChineseGFXfont(uint8_t *bitmap, GFXglyph *glyph,
+                             uint16_t *unicodeMap, uint16_t first,
+                             uint16_t last, uint8_t yAdvance,
+                             uint16_t characterCount)
+        : GFXfont{bitmap, glyph, first, last, yAdvance},
+          unicode_map(unicodeMap), ch_count(characterCount)
+    {
+    }
+};
+
 inline uint8_t *pgm_read_bitmap_ptr(const GFXfont *gfxFont)
 {
     return gfxFont->bitmap;
@@ -21,22 +38,36 @@ public:
         // 子类构造函数实现，直接调用父类构造函数
     }
 
+    void setFont(const GFXfont *font = nullptr)
+    {
+        chineseFont = nullptr;
+        writecount = 0;
+        Adafruit_GFX::setFont(font);
+    }
+
+    void setFont(const ChineseGFXfont *font)
+    {
+        chineseFont = font;
+        writecount = 0;
+        Adafruit_GFX::setFont(font);
+    }
+
     // 因为父类是模板类所以此处要定义需要使用的父类的成员
     using Adafruit_GFX::_height;
     using Adafruit_GFX::_width;
     using Adafruit_GFX::cursor_x;
     using Adafruit_GFX::cursor_y;
     using Adafruit_GFX::drawChar;
+    using Adafruit_GFX::endWrite;
     using Adafruit_GFX::gfxFont;
+    using Adafruit_GFX::startWrite;
     using Adafruit_GFX::textbgcolor;
     using Adafruit_GFX::textcolor;
     using Adafruit_GFX::textsize_x;
     using Adafruit_GFX::textsize_y;
-    using Adafruit_GFX::startWrite;
-    using Adafruit_GFX::writePixel;
-    using Adafruit_GFX::writeFillRect;
-    using Adafruit_GFX::endWrite;
     using Adafruit_GFX::wrap;
+    using Adafruit_GFX::writeFillRect;
+    using Adafruit_GFX::writePixel;
 
     GFXglyph *pgm_read_glyph_ptr(const GFXfont *gfxFont, uint32_t c)
     {
@@ -65,57 +96,63 @@ public:
 
     void drawChar(int16_t x, int16_t y, uint32_t c, uint16_t color, uint16_t bg, uint8_t size_x, uint8_t size_y)
     {
-            c -= (uint8_t)pgm_read_byte(&gfxFont->first);
-            GFXglyph *glyph = pgm_read_glyph_ptr(gfxFont, c);
-            uint8_t *bitmap = pgm_read_bitmap_ptr(gfxFont);
+        c -= pgm_read_word(&gfxFont->first);
+        GFXglyph *glyph = pgm_read_glyph_ptr(gfxFont, c);
+        uint8_t *bitmap = pgm_read_bitmap_ptr(gfxFont);
 
-            uint16_t bo = pgm_read_word(&glyph->bitmapOffset);
-            uint8_t w = pgm_read_byte(&glyph->width), h = pgm_read_byte(&glyph->height);
-            int8_t xo = pgm_read_byte(&glyph->xOffset),
-                   yo = pgm_read_byte(&glyph->yOffset);
-            uint8_t xx, yy, bits = 0, bit = 0;
-            int16_t xo16 = 0, yo16 = 0;
+        uint16_t bo = pgm_read_word(&glyph->bitmapOffset);
+        uint8_t w = pgm_read_byte(&glyph->width), h = pgm_read_byte(&glyph->height);
+        int8_t xo = pgm_read_byte(&glyph->xOffset),
+               yo = pgm_read_byte(&glyph->yOffset);
+        uint8_t xx, yy, bits = 0, bit = 0;
+        int16_t xo16 = 0, yo16 = 0;
 
-            if (size_x > 1 || size_y > 1)
+        if (size_x > 1 || size_y > 1)
+        {
+            xo16 = xo;
+            yo16 = yo;
+        }
+
+        startWrite();
+        for (yy = 0; yy < h; yy++)
+        {
+            for (xx = 0; xx < w; xx++)
             {
-                xo16 = xo;
-                yo16 = yo;
-            }
-
-            startWrite();
-            for (yy = 0; yy < h; yy++)
-            {
-                for (xx = 0; xx < w; xx++)
+                if (!(bit++ & 7))
                 {
-                    if (!(bit++ & 7))
-                    {
-                        bits = pgm_read_byte(&bitmap[bo++]);
-                    }
-                    if (bits & 0x80)
-                    {
-                        if (size_x == 1 && size_y == 1)
-                        {
-                            writePixel(x + xo + xx, y + yo + yy, color);
-                        }
-                        else
-                        {
-                            writeFillRect(x + (xo16 + xx) * size_x, y + (yo16 + yy) * size_y,
-                                          size_x, size_y, color);
-                        }
-                    }
-                    bits <<= 1;
+                    bits = pgm_read_byte(&bitmap[bo++]);
                 }
+                if (bits & 0x80)
+                {
+                    if (size_x == 1 && size_y == 1)
+                    {
+                        writePixel(x + xo + xx, y + yo + yy, color);
+                    }
+                    else
+                    {
+                        writeFillRect(x + (xo16 + xx) * size_x, y + (yo16 + yy) * size_y,
+                                      size_x, size_y, color);
+                    }
+                }
+                bits <<= 1;
             }
-            endWrite();
+        }
+        endWrite();
     }
 
     // 重写的 write 实现，用于多字节字符集 utf-8 中文的处理，转换为UNICODE
     size_t write(uint8_t c) override
     {
+        if (chineseFont == nullptr)
+        {
+            return Adafruit_GFX::write(c);
+        }
+
         uint16_t unicode;
-        uint16_t ch_count = gfxFont->ch_count;
-        uint16_t *dat = gfxFont->Chinese_;
-        uint8_t first = pgm_read_byte(&gfxFont->first);
+        uint16_t ch_count = chineseFont->ch_count;
+        uint16_t *dat = chineseFont->unicode_map;
+        uint16_t first = pgm_read_word(&gfxFont->first);
+        uint16_t last = pgm_read_word(&gfxFont->last);
 
         if (c == '\n')
         {
@@ -157,7 +194,7 @@ public:
                     }
 
                     // 判断 C 是否在范围内
-                    if ((character >= first) && (character <= (uint16_t)pgm_read_byte(&gfxFont->last)))
+                    if ((character >= first) && (character <= last))
                     {
                         GFXglyph *glyph = pgm_read_glyph_ptr(gfxFont, character - first);
                         uint8_t w = pgm_read_byte(&glyph->width),
@@ -187,7 +224,7 @@ public:
                 else
                 {
                     // 是 ascii 码，正常处理
-                    if ((c >= first) && (c <= (uint8_t)pgm_read_byte(&gfxFont->last)))
+                    if ((c >= first) && (c <= last))
                     {
                         if (c == 0xB0)
                             c = 0x7f;
@@ -215,6 +252,12 @@ public:
     // 重写以下三个方法，保证charBounds的调用链完整被重写，防止其他重载的父类接口被调用
     void getTextBounds(const char *str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
     {
+        if (chineseFont == nullptr)
+        {
+            Adafruit_GFX::getTextBounds(str, x, y, x1, y1, w, h);
+            return;
+        }
+
         uint8_t c;                                                  // Current character
         int16_t minx = 0x7FFF, miny = 0x7FFF, maxx = -1, maxy = -1; // Bound rect
         // Bound rect is intentionally initialized inverted, so 1st char sets it
@@ -244,6 +287,12 @@ public:
 
     void getTextBounds(const __FlashStringHelper *str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
     {
+        if (chineseFont == nullptr)
+        {
+            Adafruit_GFX::getTextBounds(str, x, y, x1, y1, w, h);
+            return;
+        }
+
         uint8_t *s = (uint8_t *)str, c;
 
         *x1 = x;
@@ -271,6 +320,12 @@ public:
 
     void getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
     {
+        if (chineseFont == nullptr)
+        {
+            Adafruit_GFX::getTextBounds(str, x, y, x1, y1, w, h);
+            return;
+        }
+
         if (str.length() != 0)
         {
             getTextBounds(const_cast<char *>(str.c_str()), x, y, x1, y1, w, h);
@@ -278,16 +333,24 @@ public:
     }
 
 protected:
+    const ChineseGFXfont *chineseFont = nullptr;
     uint8_t writecount = 0;
     uint8_t temparray[3];
 
     // 重写该方法，兼容 utf-8 编码的汉字的宽度获取
     void charBounds(unsigned char c, int16_t *x, int16_t *y, int16_t *minx, int16_t *miny, int16_t *maxx, int16_t *maxy)
     {
+        if (chineseFont == nullptr)
+        {
+            Adafruit_GFX::charBounds(c, x, y, minx, miny, maxx, maxy);
+            return;
+        }
+
         uint16_t unicode;
-        uint16_t ch_count = gfxFont->ch_count;
-        uint16_t *dat = gfxFont->Chinese_;
-        uint8_t first = pgm_read_byte(&gfxFont->first);
+        uint16_t ch_count = chineseFont->ch_count;
+        uint16_t *dat = chineseFont->unicode_map;
+        uint16_t first = pgm_read_word(&gfxFont->first);
+        uint16_t last = pgm_read_word(&gfxFont->last);
 
         if (c == '\n')
         {
@@ -330,7 +393,7 @@ protected:
                     }
 
                     // 判断 C 是否在范围内
-                    if ((character >= first) && (character <= (uint16_t)pgm_read_byte(&gfxFont->last)))
+                    if ((character >= first) && (character <= last))
                     {
                         GFXglyph *glyph = pgm_read_glyph_ptr(gfxFont, character - first);
 
@@ -376,7 +439,7 @@ protected:
                 else
                 {
                     // 是 ascii 码，正常处理
-                    if ((c >= first) && (c <= (uint16_t)pgm_read_byte(&gfxFont->last)))
+                    if ((c >= first) && (c <= last))
                     {
                         if (c == 0xB0)
                             c = 0x7f;

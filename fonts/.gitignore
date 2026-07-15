@@ -1,2 +1,4 @@
 fontconvert/fontconvert
 fonts
+__pycache__/
+*.py[cod]

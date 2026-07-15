@@ -1,5 +1,6 @@
 #ifndef __FONTS_HWKT_H__
 #define __FONTS_HWKT_H__
+#define GFXfont ChineseGFXfont
 #include "HWKT/HWKT_10pt8b.h"
 #include "HWKT/HWKT_11pt8b.h"
 #include "HWKT/HWKT_12pt8b.h"
@@ -17,6 +18,7 @@
 #include "HWKT/HWKT_7pt8b.h"
 #include "HWKT/HWKT_8pt8b.h"
 #include "HWKT/HWKT_9pt8b.h"
+#undef GFXfont
 
 #define FONT_10pt8b HWKT_10pt8b
 #define FONT_11pt8b HWKT_11pt8b

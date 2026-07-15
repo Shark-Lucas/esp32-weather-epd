@@ -1,5 +1,7 @@
 #!/bin/bash
 # Font file to Adafruit GFX format script for esp32-weather-epd.
+# Legacy bulk generator. For Unicode ChineseGFXfont output use
+# update_fonts.py, which performs source scanning and offset validation.
 
 
 TTF_FILES=ttf/*
@@ -62,4 +64,3 @@ for fontfile in $TTF_FILES
   echo "#endif" >> $HEADER_FILE
 
 done
-

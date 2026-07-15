@@ -1,5 +1,10 @@
 #ifndef __FONTS_DENGB_H__
 #define __FONTS_DENGB_H__
+
+// The generated Chinese font headers carry two metadata fields in addition to
+// the standard Adafruit GFXfont layout. Keep that extension local to these
+// assets instead of patching Adafruit GFX in .pio/libdeps.
+#define GFXfont ChineseGFXfont
 #include "Dengb/Dengb_10pt8b.h"
 #include "Dengb/Dengb_11pt8b.h"
 #include "Dengb/Dengb_12pt8b.h"
@@ -17,6 +22,7 @@
 #include "Dengb/Dengb_7pt8b.h"
 #include "Dengb/Dengb_8pt8b.h"
 #include "Dengb/Dengb_9pt8b.h"
+#undef GFXfont
 
 #define FONT_10pt8b Dengb_10pt8b
 #define FONT_11pt8b Dengb_11pt8b

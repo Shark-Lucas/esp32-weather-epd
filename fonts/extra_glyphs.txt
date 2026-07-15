@@ -1,0 +1,6 @@
+# Runtime text and planned UI text that static source scanning cannot discover.
+# Keep one or more UTF-8 text lines below. Duplicate characters are harmless.
+#
+# Provisioning and recovery vocabulary reserved for the Chinese UI:
+配网连接热点密码打开分钟内完成超时按复位键未保存启动失败退出
+未找到目标网络错误进入下次更新自动重试检查充电器恢复

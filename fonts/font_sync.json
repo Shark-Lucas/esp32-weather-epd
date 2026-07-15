@@ -1,0 +1,18 @@
+{
+  "family": "Dengb",
+  "dpi": 141,
+  "sizes": [16],
+  "font_candidates": [
+    "fonts/ttf/Dengb.ttf",
+    "C:/Windows/Fonts/Dengb.ttf"
+  ],
+  "scan_roots": [
+    "platformio/src",
+    "platformio/include"
+  ],
+  "extra_character_files": [
+    "fonts/extra_glyphs.txt"
+  ],
+  "output_template": "platformio/lib/esp32-weather-epd-assets/fonts/{family}/{family}_{size}pt8b.h",
+  "platformio_environment": "dfrobot_firebeetle2_esp32e"
+}
