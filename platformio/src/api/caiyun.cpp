@@ -173,8 +173,6 @@ unsigned long parseIso8601ToTimestamp(const String& dateTime)
 
 DeserializationError deserializeWeather(WiFiClient &json, owm_resp_onecall_t &r)
 {
-    int i;
-
     JsonDocument filter;
     filter["server_time"] = true;
     filter["forecast_keypoint"] = true;
@@ -238,8 +236,6 @@ DeserializationError deserializeWeather(WiFiClient &json, owm_resp_onecall_t &r)
 
     // 未来五天预报部分
     JsonObject result_daily = result["daily"];
-    const char* result_daily_status = result_daily["status"];
-
     for (JsonObject result_daily_temperature_item : result_daily["temperature"].as<JsonArray>())
     {
         r.daily[index].temp.max = result_daily_temperature_item["max"].as<float>();
@@ -263,7 +259,11 @@ DeserializationError deserializeWeather(WiFiClient &json, owm_resp_onecall_t &r)
     {
         r.hourly[index].dt   = parseIso8601ToTimestamp(result_hourly_temperature_item["datetime"].as<String>());
         r.hourly[index].temp = result_hourly_temperature_item["value"].as<float>();
-        Serial.printf("dt = %lu, temp = %.2f\n", r.hourly[i].dt, r.hourly[i].temp);
+#if DEBUG_LEVEL >= 1
+        Serial.printf("dt = %lld, temp = %.2f\n",
+                      static_cast<long long>(r.hourly[index].dt),
+                      r.hourly[index].temp);
+#endif
         index ++;
     }
     index = 0;
@@ -272,7 +272,9 @@ DeserializationError deserializeWeather(WiFiClient &json, owm_resp_onecall_t &r)
     {
         r.hourly[index].rain_1h = result_hourly_precipitation_item["value"].as<float>() * 3600;
         r.hourly[index].snow_1h = 0;    // 彩云没有降雪数据，全是降水
-        Serial.printf("rain_1h = %f\n", r.hourly[i].rain_1h);
+#if DEBUG_LEVEL >= 1
+        Serial.printf("rain_1h = %f\n", r.hourly[index].rain_1h);
+#endif
         index ++;
     }
     index = 0;

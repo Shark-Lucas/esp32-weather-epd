@@ -104,7 +104,7 @@ void drawString(int16_t x, int16_t y, const String &text, alignment_t alignment,
   uint16_t w, h;
   display.setTextColor(color);
   display.getTextBounds(text, x, y, &x1, &y1, &w, &h);
-  Serial.printf("text = %s\n", text);
+  Serial.printf("text = %s\n", text.c_str());
   Serial.printf("w = %d, h = %d\n", w, h);
   if (alignment == RIGHT)
   {
@@ -821,7 +821,6 @@ void drawLocationDate(const String &city, const String &date)
   // location, date
   display.setFont(&FONT_16pt8b);
   Serial.printf("city = %s\n", city.c_str());
-  Serial.printf("display.gfxFont->ch_count = %d\n", display.gfxFont->ch_count);
   
   drawString(DISP_WIDTH - 2, 23, city, RIGHT, ACCENT_COLOR);
   display.setFont(&FONT_12pt8b);
@@ -834,7 +833,8 @@ void drawLocationDate(const String &city, const String &date)
  * 余数运算符。余数运算符和模数运算符等价
  * 对于正数来说是等价的，但对于负数来说不是。下面是
  * 调制运算符适用于 +/-a 和 +b。
-/* The % operator in C++ is not a true modulo operator but it instead a
+ *
+ * The % operator in C++ is not a true modulo operator but it instead a
  * remainder operator. The remainder operator and modulo operator are equivalent
  * for positive numbers, but not for negatives. The follow implementation of the
  * modulo operator works for +/-a and +b.
@@ -1229,4 +1229,66 @@ void drawError(const uint8_t *bitmap_196x196,
                              bitmap_196x196, 196, 196, ACCENT_COLOR);
   return;
 } // end drawError
+
+/* Draws a persistent status page containing a reason and the actions the user
+ * can take next. A smaller icon and 16pt font leave enough room for six short
+ * lines on both the 800x480 and legacy 640x384 panels.
+ */
+void drawActionScreen(const uint8_t *bitmap_128x128,
+                      const String &title,
+                      const String &line1, const String &line2,
+                      const String &line3, const String &line4,
+                      const String &line5)
+{
+  const String *allLines[] = {&title, &line1, &line2, &line3, &line4, &line5};
+  constexpr uint8_t maxLines = sizeof(allLines) / sizeof(allLines[0]);
+  uint8_t visibleLines = 0;
+  for (uint8_t i = 0; i < maxLines; ++i)
+  {
+    if (!allLines[i]->isEmpty())
+    {
+      ++visibleLines;
+    }
+  }
+
+  constexpr int16_t iconSize = 128;
+  constexpr int16_t iconX = 20;
+  constexpr int16_t textLeft = 168;
+  constexpr int16_t lineSpacing = 50;
+  const int16_t textWidth = DISP_WIDTH - textLeft - 20;
+  const int16_t textCenter = textLeft + textWidth / 2;
+  const int16_t textHeight = visibleLines > 0
+                           ? (visibleLines - 1) * lineSpacing
+                           : 0;
+  int16_t textY = (DISP_HEIGHT - textHeight) / 2 + 10;
+
+  display.drawInvertedBitmap(iconX, (DISP_HEIGHT - iconSize) / 2,
+                             bitmap_128x128, iconSize, iconSize,
+                             ACCENT_COLOR);
+  display.setFont(&FONT_16pt8b);
+
+  bool isTitle = true;
+  for (uint8_t i = 0; i < maxLines; ++i)
+  {
+    if (allLines[i]->isEmpty())
+    {
+      continue;
+    }
+    drawString(textCenter, textY, *allLines[i], CENTER,
+               isTitle ? ACCENT_COLOR : GxEPD_BLACK);
+    isTitle = false;
+    textY += lineSpacing;
+  }
+} // end drawActionScreen
+
+void drawWiFiSetupScreen(const String &apName, const String &apPassword)
+{
+  drawActionScreen(wifi_128x128,
+                   TXT_WIFI_SETUP_TITLE,
+                   String(TXT_WIFI_SETUP_CONNECT_TO) + " " + apName,
+                   String(TXT_WIFI_SETUP_PASSWORD) + " " + apPassword,
+                   String(TXT_WIFI_SETUP_OPEN) + " 192.168.4.1",
+                   TXT_WIFI_SETUP_FINISH_SOON,
+                   TXT_WIFI_SETUP_RETRY);
+} // end drawWiFiSetupScreen
 

@@ -622,7 +622,7 @@ const uint8_t *getForecastBitmap64(const owm_daily_t &daily)
   bool windy = (daily.wind_speed >= 32.2 /*m/s*/
              || daily.wind_gust  >= 40.2 /*m/s*/);
 
-  const uint8_t *bitmap;
+  const uint8_t *bitmap = nullptr;
 
   std::string str = daily.weather.skycon.c_str();
   std::unordered_map<std::string, std::function<void()>> cases;
@@ -673,10 +673,12 @@ const uint8_t *getForecastBitmap64(const owm_daily_t &daily)
   if (cases.find(str) != cases.end())
   {
     cases[str](); // 调用与字符串对应的函数
+    return bitmap;
   }
 
-  return bitmap;
-  // 下面是原逻辑，彩云不支持这么多模式，就用上面的直接下面的不要了
+  // Unknown/empty skycon means this is OpenWeather data (or a future Caiyun
+  // condition). Fall through to the provider-neutral OpenWeather condition-id
+  // mapping, which also has a safe fallback icon.
 
   switch (id)
   {
@@ -817,15 +819,25 @@ const uint8_t *getCurrentConditionsBitmap196(const owm_current_t &current,
                                              const owm_daily_t   &today)
 {
   int id = current.weather.id;
-  // 当前时间在日出和日落之间则为白天
-  bool day = ((current.dt >= today.sunrise) && (current.dt <= today.sunset));
-  // 当前时间小于日出或大于日落则为晚上
-  bool moon = ((current.dt < today.sunrise) || (current.dt > today.sunset));
+  bool usingSkycon = !current.weather.skycon.isEmpty();
+  // Caiyun encodes day/night in skycon and exposes sunrise/sunset on current;
+  // OpenWeather exposes day/night in the weather icon suffix.
+  bool day = usingSkycon
+           ? ((current.dt >= current.sunrise) && (current.dt <= current.sunset))
+           : current.weather.icon.endsWith("d");
+  // Preserve OpenWeather's moonrise/moonset behavior. Caiyun does not populate
+  // those fields, so a night skycon simply uses the night/moon artwork.
+  bool moon = usingSkycon
+            ? !day
+            : ((current.dt >= today.moonrise && current.dt < today.moonset)
+               || (today.moonrise > today.moonset
+                   && current.dt >= today.moonrise));
 
   bool cloudy = current.clouds > 60.25; // partly cloudy / partly sunny
-  bool windy = current.wind_speed >= 32.2;
+  bool windy = (current.wind_speed >= 32.2 /*m/s*/
+             || current.wind_gust  >= 40.2 /*m/s*/);
 
-  const uint8_t *bitmap;
+  const uint8_t *bitmap = nullptr;
 
   std::string str = current.weather.skycon.c_str();
   std::unordered_map<std::string, std::function<void()>> cases;
@@ -876,10 +888,11 @@ const uint8_t *getCurrentConditionsBitmap196(const owm_current_t &current,
   if (cases.find(str) != cases.end())
   {
     cases[str](); // 调用与字符串对应的函数
+    return bitmap;
   }
 
-  return bitmap;
-  // 下面是原逻辑，彩云不支持这么多模式，就用上面的直接下面的不要了
+  // OpenWeather does not populate skycon; continue with its condition-id
+  // mapping. Unknown ids are handled by the switch default below.
 
   switch (id)
   {

@@ -83,5 +83,11 @@ void drawStatusBar(const String &statusStr, const String &refreshTimeStr,
                    int rssi, uint32_t batVoltage);
 void drawError(const uint8_t *bitmap_196x196,
                const String &errMsgLn1, const String &errMsgLn2="");
+void drawActionScreen(const uint8_t *bitmap_128x128,
+                      const String &title,
+                      const String &line1="", const String &line2="",
+                      const String &line3="", const String &line4="",
+                      const String &line5="");
+void drawWiFiSetupScreen(const String &apName, const String &apPassword);
 
 #endif
