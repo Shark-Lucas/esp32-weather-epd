@@ -30,6 +30,7 @@ Here are two examples utilizing various configuration options:
     -   [Hardware](#hardware)
     -   [Wiring](#wiring)
     -   [Configuration, Compilation, and Upload](#configuration-compilation-and-upload)
+    -   [WiFi Provisioning](#wifi-provisioning)
     -   [OpenWeatherMap API Key](#openweathermap-api-key)
 -   [Error Messages and Troubleshooting](#error-messages-and-troubleshooting)
     -   [Low Battery](#low-battery)
@@ -198,13 +199,13 @@ PlatformIO for VSCode is used for managing dependencies, code compilation, and u
 
 5. Configure Options.
 
-   - Most configuration options are located in [config.cpp](platformio/src/config.cpp), with a few  in [config.h](platformio/include/config.h). Locale/language options can also be found in locales/locale_**.cpp.
+   - Copy `platformio/include/secrets.example.h` to `platformio/include/secrets.h`, then enter your OpenWeather API key in `secrets.h`. This private file is ignored by Git. WiFi credentials are entered at runtime and are not compiled into the firmware.
+
+   - Most non-secret configuration options are located in [config.cpp](platformio/src/config.cpp), with a few in [config.h](platformio/include/config.h). Locale/language options can also be found in locales/locale_**.inc.
 
    - Important settings to configure in config.cpp:
 
-     - WiFi credentials (ssid, password).
-
-     - Open Weather Map API key (it's free, see next section for important notes about obtaining an API key).
+     - Weather provider selection (`WEATHER_PROVIDER_OPENWEATHER` or `WEATHER_PROVIDER_CAIYUN`).
 
      - Latitude and longitude.
 
@@ -218,7 +219,13 @@ PlatformIO for VSCode is used for managing dependencies, code compilation, and u
 
      - Units (Metric or Imperial).
 
+     - OpenWeather One Call API version: set `OWM_ONECALL_API_VERSION` to `3`
+       or `4`. Both implementations have separate request and parser paths;
+       changing this one value is sufficient to switch versions.
+
    - Comments explain each option in detail.
+
+   - For Chinese UI text, run `fonts/update_fonts.ps1 -Check` to detect missing glyphs. Double-click `fonts/update_fonts.cmd` to regenerate the configured Chinese bitmap font and build the firmware. Runtime-only text can be reserved in `fonts/extra_glyphs.txt`; see `fonts/README` for details.
 
 6. Build and Upload Code.
 
@@ -232,18 +239,47 @@ PlatformIO for VSCode is used for managing dependencies, code compilation, and u
 
       - If you are getting errors during the upload process, you may need to install drivers to allow you to upload code to the ESP32.
 
+### WiFi Provisioning
+
+WiFi credentials are configured from a phone or computer and saved in the ESP32 WiFi NVS. The current code no longer reads WiFi credentials from `config.cpp` or `secrets.h`, and does not compile them into the firmware. This project does not enable NVS encryption, so physical access to the module should still be treated as access to the saved network credentials.
+
+The device uses the existing RESET button to enter the setup portal:
+
+- On first boot with no saved network, the setup portal starts automatically.
+- After a WiFi connection failure, press RESET once to enter setup.
+- When the saved WiFi is working, press RESET twice within 4 seconds to enter setup.
+- Scheduled deep-sleep wake-ups are ignored by reset detection and continue normal weather updates.
+
+When setup starts, the E-Paper display shows a temporary access point named `EPD-XXXX`, its generated password, and the address `192.168.4.1`. Connect a phone or computer to that access point, open the displayed address, select the target WiFi network, and save it within 3 minutes. The device keeps existing saved credentials if setup times out or is exited without a successful connection.
+
+Failure screens show both the detected reason and the supported next actions. To reduce E-Paper wear, an unchanged WiFi failure is not redrawn on every scheduled retry; the display updates when the failure type changes or when setup finishes with a result.
+
 ### OpenWeatherMap API Key
 
 Sign up here to get an API key; it's free. <https://openweathermap.org/api>
 
-This project will make calls to 2 different APIs ("One Call" and "Air Pollution").
+This project uses the OpenWeather One Call and Air Pollution APIs.
 
 > **Note**
-> OpenWeatherMap One Call 2.5 API has been deprecated for all new free users (accounts created after Summer 2022). Fortunately, you can make 1,000 calls/day to the One Call 3.0 API for free by following the steps below.
+> One Call 3.0 and One Call 4.0 are separate products. Make sure the API key is
+> active for the version selected in `platformio/include/config.h`.
 
-- If you have an account created before Summer 2022, you can simply use the One Call 2.5 API by setting `OWM_ONECALL_VERSION = "2.5";` in config.cpp.
+- Put the API key in `platformio/include/secrets.h`; never commit this file.
 
-- Otherwise, the One Call API 3.0 is only included in the "One Call by Call" subscription. This separate subscription includes 1,000 calls/day for free and allows you to pay only for the number of API calls made to this product.
+- Set `OWM_ONECALL_API_VERSION` to `3` or `4` in `platformio/include/config.h`.
+  The 3.0 implementation uses its aggregate endpoint. The independent 4.0
+  adapter uses the current, hourly timeline, and daily timeline endpoints and
+  maps them into the existing renderer data model.
+
+- One Call 4.0 may occasionally return a complete daily record with
+  `weather: null`. The 4.0 adapter handles this service-side omission locally by
+  deriving a compatible forecast condition from rain, snow, and cloud cover;
+  the 3.0 parser is not affected.
+
+- One Call APIs are included in OpenWeather's "One Call by Call" subscription.
+  Check the current OpenWeather pricing and request limits before choosing an
+  update interval. One 4.0 refresh uses more requests than one 3.0 aggregate
+  refresh because the 4.0 hourly timeline is paginated.
 
 Here's how to subscribe and avoid any credit card changes:
    - Go to <https://home.openweathermap.org/subscriptions/billing_info/onecall_30/base?key=base&service=onecall_30>
@@ -260,7 +296,7 @@ This error screen appears once the battery voltage has fallen below LOW_BATTERY_
 
 ### WiFi Connection
 <img src="showcase/demo-error-wifi.jpg" align="left" width="25%" />
-This error screen appears when the ESP32 fails to connect to WiFi. If the message reads "WiFi Connection Failed" this might indicate an incorrect password. If the message reads "SSID Not Available" this might indicate that you mistyped the SSID or that the esp32 is out of the range of the access point. The esp32 will retry once every SLEEP_DURATION (default = 30min).
+This screen distinguishes missing saved credentials, unavailable networks, rejected credentials, connection timeouts, and setup portal failures. Follow the action shown on the display. In normal operation, the ESP32 retries once every `SLEEP_DURATION` (default: 30 minutes). After a failure, a single RESET opens WiFi setup so the network can be repaired without rebuilding or reflashing the firmware.
 
 <br clear="left"/>
 
