@@ -21,6 +21,17 @@
 #include <cstdint>
 #include <Arduino.h>
 
+// WEATHER DATA PROVIDER
+// Select exactly one provider. The renderer and low-power behavior are shared,
+// so switching providers does not change the display layout or wake cycle.
+#define WEATHER_PROVIDER_OPENWEATHER
+// #define WEATHER_PROVIDER_CAIYUN
+
+// OPENWEATHER ONE CALL API VERSION
+// Change only this value to switch between the independent 3.0 and 4.0
+// request/parser implementations.
+#define OWM_ONECALL_API_VERSION 4
+
 // E-PAPER PANEL
 // This project supports the following E-Paper panels:
 //   DISP_BW_V2 - 7.5in e-paper (v2)      800x480px  Black/White
@@ -149,8 +160,8 @@
 //   The current certificate for api.openweathermap.org is valid until
 //   2030-12-31 23:59:59.
 // (uncomment exactly one)
-// #define USE_HTTP
-#define USE_HTTPS_NO_CERT_VERIF
+#define USE_HTTP
+// #define USE_HTTPS_NO_CERT_VERIF
 // #define USE_HTTPS_WITH_CERT_VERIF
 
 // WIND DIRECTION INDICATOR
@@ -267,11 +278,17 @@ extern const uint8_t PIN_BME_SDA;
 extern const uint8_t PIN_BME_SCL;
 extern const uint8_t PIN_BME_PWR;
 extern const uint8_t BME_ADDRESS;
-extern const char *WIFI_SSID;
-extern const char *WIFI_PASSWORD;
 extern const unsigned long WIFI_TIMEOUT;
+extern const unsigned long WIFI_PORTAL_TIMEOUT;
+extern const unsigned long WIFI_SAVE_CONNECT_TIMEOUT;
+extern const unsigned long WIFI_DOUBLE_RESET_WINDOW;
 extern const String OWM_APIKEY;
 extern const String OWM_ENDPOINT;
+extern const String OWM_DNS_TARGET;
+extern const IPAddress OWM_FALLBACK_IP;
+extern const String OWM_GLOBAL_ENDPOINT;
+extern const String OWM_GLOBAL_DNS_TARGET;
+extern const IPAddress OWM_GLOBAL_FALLBACK_IP;
 extern const String OWM_ONECALL_VERSION;
 extern const String CY_APIKEY;
 extern const String CY_ENDPOINT;
@@ -287,6 +304,7 @@ extern const char *REFRESH_TIME_FORMAT;
 extern const char *NTP_SERVER_1;
 extern const char *NTP_SERVER_2;
 extern const unsigned long NTP_TIMEOUT;
+extern const unsigned long NTP_RESYNC_INTERVAL;
 extern const long SLEEP_DURATION;
 extern const int BED_TIME;
 extern const int WAKE_TIME;
@@ -305,6 +323,15 @@ extern const unsigned long VERY_LOW_BATTERY_SLEEP_INTERVAL;
       ^ defined(DISP_7C_F)   \
       ^ defined(DISP_BW_V1))
   #error Invalid configuration. Exactly one display panel must be selected.
+#endif
+#if !(  defined(WEATHER_PROVIDER_OPENWEATHER) \
+      ^ defined(WEATHER_PROVIDER_CAIYUN))
+  #error Invalid configuration. Exactly one weather provider must be selected.
+#endif
+#if defined(WEATHER_PROVIDER_OPENWEATHER) \
+    && OWM_ONECALL_API_VERSION != 3 \
+    && OWM_ONECALL_API_VERSION != 4
+  #error Invalid configuration. OWM_ONECALL_API_VERSION must be 3 or 4.
 #endif
 #if !(  defined(DRIVER_WAVESHARE) \
       ^ defined(DRIVER_DESPI_C02))

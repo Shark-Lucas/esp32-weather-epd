@@ -18,6 +18,13 @@
 #include <Arduino.h>
 #include "config.h"
 
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#else
+  #include "secrets.example.h"
+  #warning "secrets.h not found; using empty credentials from secrets.example.h"
+#endif
+
 // PINS
 // The configuration below is intended for use with the project's official 
 // wiring diagrams using the FireBeetle 2 ESP32-E microcontroller board.
@@ -44,14 +51,31 @@ const uint8_t PIN_BME_PWR =  4;   // Irrelevant if directly connected to 3.3V
 const uint8_t BME_ADDRESS = 0x76; // If sensor does not work, try 0x77
 
 // WIFI
-const char *WIFI_SSID     = "502";
-const char *WIFI_PASSWORD = "501501501";
 const unsigned long WIFI_TIMEOUT = 10000; // ms, WiFi connection timeout.
+const unsigned long WIFI_PORTAL_TIMEOUT = 180; // seconds, hard portal limit.
+const unsigned long WIFI_SAVE_CONNECT_TIMEOUT = 15; // seconds.
+const unsigned long WIFI_DOUBLE_RESET_WINDOW = 4000; // ms.
 
 // OPENWEATHERMAP API
 // OpenWeatherMap API key, https://openweathermap.org/
-const String OWM_APIKEY   = "";
-const String OWM_ENDPOINT = "api.openweathermap.org";
+const String OWM_APIKEY   = SECRET_OWM_API_KEY;
+// OpenWeather's official regional endpoint for users in mainland China.
+// API paths, parameters, response formats, and API keys are the same as the
+// global standard endpoint.
+const String OWM_ENDPOINT = "cn-api.openweathermap.org";
+// The China endpoint currently aliases this host. Resolving the final target
+// directly avoids a CNAME-chain limitation seen in ESP32's lwIP resolver.
+const String OWM_DNS_TARGET = "us-west-api.openweathermap.org";
+// Last-resort address used only if both DNS servers time out. HTTP requests
+// still carry OWM_ENDPOINT as their Host header.
+const IPAddress OWM_FALLBACK_IP(38, 143, 66, 114);
+// Some One Call 4.0 timeline endpoints are not currently responsive through
+// the China frontend. The 4.0 adapter uses the global endpoint only for those
+// endpoints while keeping current/hourly/air-quality traffic on the regional
+// endpoint.
+const String OWM_GLOBAL_ENDPOINT = "api.openweathermap.org";
+const String OWM_GLOBAL_DNS_TARGET = "api.openweathermap.org";
+const IPAddress OWM_GLOBAL_FALLBACK_IP(15, 235, 222, 68);
 // OpenWeatherMap One Call 2.5 API is deprecated for all new free users
 // (accounts created after Summer 2022).
 //
@@ -66,22 +90,26 @@ const String OWM_ENDPOINT = "api.openweathermap.org";
 // - Go to https://home.openweathermap.org/subscriptions and set the "Calls per
 //   day (no more than)" to 1,000. This ensures you will never overrun the free
 //   calls.
+#if OWM_ONECALL_API_VERSION == 3
 const String OWM_ONECALL_VERSION = "3.0";
+#elif OWM_ONECALL_API_VERSION == 4
+const String OWM_ONECALL_VERSION = "4.0";
+#endif
 
 
 // 彩云天气 API
 // 彩云天气 API key, https://platform.caiyunapp.com
-const String CY_APIKEY       = "3jPlVTQefXq1UCyc";
+const String CY_APIKEY       = SECRET_CY_API_KEY;
 const String CY_ENDPOINT     = "api.caiyunapp.com";
 const String CY_API_VERSION  = "v2.6";
 
 // LOCATION
 // Set your latitude and longitude.
 // (used to get weather data as part of API requests to OpenWeatherMap)
-const String LAT = "31.1376";
-const String LON = "121.3218";
+const String LAT = "31.1663";
+const String LON = "121.3616";
 // City name that will be shown in the top-right corner of the display.
-const String CITY_STRING = "武汉";
+const String CITY_STRING = "上海";
 
 // TIME
 // For list of time zones see
@@ -108,11 +136,14 @@ const char *DATE_FORMAT = "%B%e 日 %A"; // ex: Sat, January 1
 const char *REFRESH_TIME_FORMAT = "%y/%m/%d %H:%M";
 // NTP_SERVER_1 is the primary time server, while NTP_SERVER_2 is a fallback.
 // pool.ntp.org will find the closest available NTP server to you.
-const char *NTP_SERVER_1 = "pool.ntp.org";
-const char *NTP_SERVER_2 = "time.nist.gov";
+const char *NTP_SERVER_1 = "ntp1.aliyun.com";
+const char *NTP_SERVER_2 = "ntp.tencent.com";
 // If you encounter the 'Failed To Fetch The Time' error, try increasing
 // NTP_TIMEOUT or select closer/lower latency time servers.
 const unsigned long NTP_TIMEOUT = 20000; // ms
+// ESP32 system time is retained by the RTC timer during deep sleep. Only
+// refresh it periodically to limit drift from the internal RTC oscillator.
+const unsigned long NTP_RESYNC_INTERVAL = 12UL * 60UL * 60UL; // seconds
 // Sleep duration in minutes. (aka how often esp32 will wake for an update)
 // Aligned to the nearest minute boundary and must evenly divide 60.
 // For example, if set to 30 (minutes) the display will update at 00 or 30

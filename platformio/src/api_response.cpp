@@ -20,12 +20,16 @@
 #include "api_response.h"
 #include "config.h"
 
-DeserializationError deserializeOneCall(WiFiClient &json,
-                                        owm_resp_onecall_t &r)
+DeserializationError deserializeOneCallV3(WiFiClient &json,
+                                          owm_resp_onecall_t &r)
 {
   int i;
 
   JsonDocument filter;
+  filter["lat"]       = true;
+  filter["lon"]       = true;
+  filter["timezone"]  = true;
+  filter["timezone_offset"] = true;
   filter["current"]  = true;
   filter["minutely"] = false;
   filter["hourly"]   = true;
@@ -202,7 +206,7 @@ DeserializationError deserializeOneCall(WiFiClient &json,
 #endif
 
   return error;
-} // end deserializeOneCall
+} // end deserializeOneCallV3
 
 DeserializationError deserializeAirQuality(WiFiClient &json,
                                            owm_resp_air_pollution_t &r)

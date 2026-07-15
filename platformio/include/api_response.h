@@ -214,8 +214,10 @@ typedef struct owm_resp_air_pollution
   int64_t          dt[OWM_NUM_AIR_POLLUTION];         // Date and time, Unix, UTC;
 } owm_resp_air_pollution_t;
 
-DeserializationError deserializeOneCall(WiFiClient &json,
-                                        owm_resp_onecall_t &r);
+// One Call 3.0 aggregate-response parser. Kept separate from the 4.0 adapter
+// in api/openweather_v4.h so either API can evolve independently.
+DeserializationError deserializeOneCallV3(WiFiClient &json,
+                                          owm_resp_onecall_t &r);
 DeserializationError deserializeAirQuality(WiFiClient &json,
                                            owm_resp_air_pollution_t &r);
 
