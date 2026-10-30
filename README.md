@@ -32,6 +32,7 @@ Here are two examples utilizing various configuration options:
     -   [Configuration, Compilation, and Upload](#configuration-compilation-and-upload)
     -   [WiFi Provisioning](#wifi-provisioning)
     -   [OpenWeatherMap API Key](#openweathermap-api-key)
+    -   [Cloudflare Worker Relay](#cloudflare-worker-relay)
 -   [Error Messages and Troubleshooting](#error-messages-and-troubleshooting)
     -   [Low Battery](#low-battery)
     -   [WiFi Connection](#wifi-connection)
@@ -285,6 +286,16 @@ Here's how to subscribe and avoid any credit card changes:
    - Go to <https://home.openweathermap.org/subscriptions/billing_info/onecall_30/base?key=base&service=onecall_30>
    - Follow the instructions to complete the subscription.
    - Go to <https://home.openweathermap.org/subscriptions> and set the "Calls per day (no more than)" to 1,000. This ensures you will never overrun the free calls.
+
+### Cloudflare Worker Relay
+
+An optional authenticated OpenWeather relay with KV caching is provided in
+[`cloudflare-worker/`](cloudflare-worker/README.md). The Chinese deployment guide
+covers dashboard and Wrangler setup, Secrets, custom domains, and verification.
+The OpenWeather firmware now defaults to verified HTTPS through the configured
+relay. Set `SECRET_OWM_RELAY_TOKEN` in the ignored `platformio/include/secrets.h`
+to match the Worker's `DEVICE_TOKEN`. Comment out `OWM_USE_RELAY` in `config.h`
+to restore direct access.
 
 ## Error Messages and Troubleshooting
 

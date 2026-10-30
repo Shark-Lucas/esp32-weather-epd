@@ -32,6 +32,12 @@
 // request/parser implementations.
 #define OWM_ONECALL_API_VERSION 4
 
+// Route OpenWeather requests through the authenticated HTTPS Worker.
+// Comment out the define to restore direct OpenWeather access.
+#ifdef WEATHER_PROVIDER_OPENWEATHER
+  #define OWM_USE_RELAY
+#endif
+
 // E-PAPER PANEL
 // This project supports the following E-Paper panels:
 //   DISP_BW_V2 - 7.5in e-paper (v2)      800x480px  Black/White
@@ -159,10 +165,14 @@
 //   Running cert.py will generate an updated cert.h file.
 //   The current certificate for api.openweathermap.org is valid until
 //   2030-12-31 23:59:59.
-// (uncomment exactly one)
-#define USE_HTTP
-// #define USE_HTTPS_NO_CERT_VERIF
-// #define USE_HTTPS_WITH_CERT_VERIF
+// The relay always verifies TLS; choose exactly one mode for direct access.
+#ifdef OWM_USE_RELAY
+  #define USE_HTTPS_WITH_CERT_VERIF
+#else
+  #define USE_HTTP
+  // #define USE_HTTPS_NO_CERT_VERIF
+  // #define USE_HTTPS_WITH_CERT_VERIF
+#endif
 
 // WIND DIRECTION INDICATOR
 // Choose whether the wind direction indicator should be an arrow, number, or
@@ -282,7 +292,11 @@ extern const unsigned long WIFI_TIMEOUT;
 extern const unsigned long WIFI_PORTAL_TIMEOUT;
 extern const unsigned long WIFI_SAVE_CONNECT_TIMEOUT;
 extern const unsigned long WIFI_DOUBLE_RESET_WINDOW;
+extern const IPAddress WIFI_DNS_PRIMARY;
+extern const IPAddress WIFI_DNS_SECONDARY;
 extern const String OWM_APIKEY;
+extern const String OWM_RELAY_HOST;
+extern const String OWM_RELAY_TOKEN;
 extern const String OWM_ENDPOINT;
 extern const String OWM_DNS_TARGET;
 extern const IPAddress OWM_FALLBACK_IP;
@@ -389,6 +403,9 @@ extern const unsigned long VERY_LOW_BATTERY_SLEEP_INTERVAL;
       ^ defined(USE_HTTPS_NO_CERT_VERIF)    \
       ^ defined(USE_HTTPS_WITH_CERT_VERIF))
   #error Invalid configuration. Exactly one HTTP mode must be selected.
+#endif
+#if defined(OWM_USE_RELAY) && !defined(USE_HTTPS_WITH_CERT_VERIF)
+  #error Invalid configuration. The OpenWeather relay requires verified HTTPS.
 #endif
 #if !(  defined(WIND_INDICATOR_ARROW)                         \
       || (                                                    \

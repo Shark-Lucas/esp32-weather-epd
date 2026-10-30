@@ -1,0 +1,4 @@
+# Copy to .dev.vars for local development. This example contains no real keys.
+# DEVICE_TOKEN accepts 32-256 characters; hexadecimal encoding is not required.
+OPENWEATHER_API_KEY="replace-with-your-openweather-key"
+DEVICE_TOKEN="replace-with-a-random-token-of-at-least-32-characters"

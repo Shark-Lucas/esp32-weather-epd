@@ -23,6 +23,7 @@
 
 // arduino/esp32 libraries
 #include <Arduino.h>
+#include <esp_netif.h>
 #include <esp_sntp.h>
 #include <HTTPClient.h>
 #include <SPI.h>
@@ -75,21 +76,33 @@ bool owmGlobalAddressReady = false;
 
 const String &getOwmEndpoint(OwmEndpointKind kind)
 {
+#ifdef OWM_USE_RELAY
+  (void)kind;
+  return OWM_RELAY_HOST;
+#else
   return kind == OwmEndpointKind::REGIONAL
        ? OWM_ENDPOINT : OWM_GLOBAL_ENDPOINT;
+#endif
 }
 
 const String &getOwmDnsTarget(OwmEndpointKind kind)
 {
+#ifdef OWM_USE_RELAY
+  (void)kind;
+  return OWM_RELAY_HOST;
+#else
   return kind == OwmEndpointKind::REGIONAL
        ? OWM_DNS_TARGET : OWM_GLOBAL_DNS_TARGET;
+#endif
 }
 
+#ifndef OWM_USE_RELAY
 IPAddress getOwmFallbackIP(OwmEndpointKind kind)
 {
   return kind == OwmEndpointKind::REGIONAL
        ? OWM_FALLBACK_IP : OWM_GLOBAL_FALLBACK_IP;
 }
+#endif
 
 IPAddress &getOwmResolvedIP(OwmEndpointKind kind)
 {
@@ -123,10 +136,17 @@ void resolveOwmAddress(OwmEndpointKind kind)
   }
   else
   {
+#ifdef OWM_USE_RELAY
+    // Never send a relay credential to an old, fixed OpenWeather address.
+    Serial.printf("[net] Relay DNS %s failed (%lu ms)\n",
+                  dnsTarget.c_str(), millis() - dnsStarted);
+    return;
+#else
     resolvedIP = getOwmFallbackIP(kind);
     Serial.printf("[net] DNS %s failed (%lu ms); fallback IP: %s\n",
                   dnsTarget.c_str(), millis() - dnsStarted,
                   resolvedIP.toString().c_str());
+#endif
   }
   addressReady = true;
 }
@@ -172,10 +192,18 @@ void printNetworkDiagnostics(const String &host)
                 dns1.c_str(), dns2.c_str());
 
   resolveOwmAddress(OwmEndpointKind::REGIONAL);
+  if (!getOwmAddressReady(OwmEndpointKind::REGIONAL))
+  {
+    return;
+  }
   const IPAddress &resolvedIP = getOwmResolvedIP(OwmEndpointKind::REGIONAL);
   const String resolvedIPString = resolvedIP.toString();
 
+#ifdef OWM_USE_RELAY
+  constexpr uint16_t probePorts[] = {443};
+#else
   constexpr uint16_t probePorts[] = {80, 443};
+#endif
   for (const uint16_t port : probePorts)
   {
     WiFiClient probe;
@@ -256,6 +284,17 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
 #endif
     http.setConnectTimeout(OWM_CONNECT_TIMEOUT);
     http.setTimeout(responseTimeout);
+#ifdef OWM_USE_RELAY
+    // ArduinoJson reads the raw stream. HTTP/1.0 avoids chunk framing, and
+    // identity encoding avoids compressed JSON that this parser cannot read.
+    http.useHTTP10(true);
+    http.addHeader("Accept-Encoding", "identity");
+    http.addHeader("Authorization", "Bearer " + OWM_RELAY_TOKEN);
+    const char *relayHeaders[] = {
+      "X-Weather-Cache", "X-Weather-Fetched-At", "Age"
+    };
+    http.collectHeaders(relayHeaders, 3);
+#endif
 
     const unsigned long requestStarted = millis();
     httpResponse = http.GET();
@@ -269,6 +308,12 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
 
     if (httpResponse == HTTP_CODE_OK)
     {
+#ifdef OWM_USE_RELAY
+      Serial.printf("[relay] cache=%s fetched=%s age=%ss\n",
+                    http.header("X-Weather-Cache").c_str(),
+                    http.header("X-Weather-Fetched-At").c_str(),
+                    http.header("Age").c_str());
+#endif
       const int expectedBodySize = http.getSize();
       Serial.printf("[net] HTTP response body: %d bytes\n", expectedBodySize);
       const DeserializationError jsonError = parser(http.getStream());
@@ -334,6 +379,40 @@ wl_status_t startWiFi(int &wifiRSSI)
   }
   return connection_status;
 } // startWiFi
+
+void configureWiFiDns()
+{
+  esp_netif_t *station = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+  if (station == nullptr)
+  {
+    Serial.println("[net] DNS configuration unavailable; keeping DHCP DNS.");
+    return;
+  }
+
+  // Keep the original DHCP resolver as a third choice. Apply this after both
+  // saved-network and provisioning connections, before SNTP or HTTPS queries.
+  const IPAddress dhcpDns = WiFi.dnsIP(0);
+  const IPAddress servers[] = {WIFI_DNS_PRIMARY, WIFI_DNS_SECONDARY, dhcpDns};
+  const esp_netif_dns_type_t types[] = {
+    ESP_NETIF_DNS_MAIN, ESP_NETIF_DNS_BACKUP, ESP_NETIF_DNS_FALLBACK
+  };
+  for (size_t index = 0; index < 3; ++index)
+  {
+    esp_netif_dns_info_t info = {};
+    info.ip.type = ESP_IPADDR_TYPE_V4;
+    info.ip.u_addr.ip4.addr = static_cast<uint32_t>(servers[index]);
+    const esp_err_t result = esp_netif_set_dns_info(station, types[index], &info);
+    if (result != ESP_OK)
+    {
+      Serial.printf("[net] DNS slot %u configuration failed: %s\n",
+                    static_cast<unsigned>(index), esp_err_to_name(result));
+    }
+  }
+  Serial.printf("[net] DNS primary=%s backup=%s fallback=%s (DHCP)\n",
+                WiFi.dnsIP(0).toString().c_str(),
+                WiFi.dnsIP(1).toString().c_str(),
+                WiFi.dnsIP(2).toString().c_str());
+}
 
 /* Disconnect and power-off WiFi.
  */
@@ -409,7 +488,21 @@ String makeOneCallV4TimelineUri(const String &step, size_t count,
 
 String sanitizedOwmUri(OwmEndpointKind kind, const String &uri)
 {
-  return getOwmEndpoint(kind) + uri + "&appid={API key}";
+#ifdef OWM_USE_RELAY
+  return getOwmEndpoint(kind) + uri;
+#else
+  return getOwmEndpoint(kind) + uri
+       + (uri.indexOf('?') < 0 ? "?appid=" : "&appid=") + "{API key}";
+#endif
+}
+
+void appendOwmApiKey(String &uri)
+{
+#ifdef OWM_USE_RELAY
+  (void)uri;
+#else
+  uri += (uri.indexOf('?') < 0 ? "?appid=" : "&appid=") + OWM_APIKEY;
+#endif
 }
 
 int getOWMonecallV3(OwmNetworkClient &client, owm_resp_onecall_t &response)
@@ -420,7 +513,7 @@ int getOWMonecallV3(OwmNetworkClient &client, owm_resp_onecall_t &response)
   uri += ",alerts";
 #endif
   const String sanitizedUri = sanitizedOwmUri(OwmEndpointKind::REGIONAL, uri);
-  uri += "&appid=" + OWM_APIKEY;
+  appendOwmApiKey(uri);
 
   return performOwmRequest(
       client, OwmEndpointKind::REGIONAL, uri, sanitizedUri,
@@ -439,7 +532,7 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
   String uri = "/data/4.0/onecall/current?lat=" + LAT + "&lon=" + LON
              + "&lang=" + OWM_LANG + "&units=standard";
   String sanitizedUri = sanitizedOwmUri(OwmEndpointKind::REGIONAL, uri);
-  uri += "&appid=" + OWM_APIKEY;
+  appendOwmApiKey(uri);
   int status = performOwmRequest(
       client, OwmEndpointKind::REGIONAL, uri, sanitizedUri,
       [&response, &alertIds](WiFiClient &stream) {
@@ -465,7 +558,7 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
         OWM_V4_PAGE_SIZE, requiredHourlyRecords - hourlyRecords);
     uri = makeOneCallV4TimelineUri("1h", requested, nextStart);
     sanitizedUri = sanitizedOwmUri(OwmEndpointKind::REGIONAL, uri);
-    uri += "&appid=" + OWM_APIKEY;
+    appendOwmApiKey(uri);
 
     size_t pageRecords = 0;
     int64_t lastTimestamp = 0;
@@ -500,7 +593,7 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
   // official 4.0 request uses the global frontend. Its schema is identical.
   uri = makeOneCallV4TimelineUri("1day", OWM_NUM_DAILY);
   sanitizedUri = sanitizedOwmUri(OwmEndpointKind::GLOBAL, uri);
-  uri += "&appid=" + OWM_APIKEY;
+  appendOwmApiKey(uri);
   size_t dailyRecords = 0;
   status = performOwmRequest(
       client, OwmEndpointKind::GLOBAL, uri, sanitizedUri,
@@ -520,9 +613,8 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
   for (const String &alertId : alertIds)
   {
     uri = "/data/4.0/onecall/alert/" + alertId;
-    sanitizedUri = getOwmEndpoint(OwmEndpointKind::GLOBAL) + uri
-                 + "?appid={API key}";
-    uri += "?appid=" + OWM_APIKEY;
+    sanitizedUri = sanitizedOwmUri(OwmEndpointKind::GLOBAL, uri);
+    appendOwmApiKey(uri);
     const int alertStatus = performOwmRequest(
         client, OwmEndpointKind::GLOBAL, uri, sanitizedUri,
         [&response](WiFiClient &stream) {
@@ -552,7 +644,14 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
   int getOWMonecall(WiFiClientSecure &client, owm_resp_onecall_t &response)
 #endif
 {
-  printNetworkDiagnostics(OWM_ENDPOINT);
+#ifdef OWM_USE_RELAY
+  if (OWM_RELAY_TOKEN.length() < 32 || OWM_RELAY_TOKEN.length() > 256)
+  {
+    Serial.println("[relay] Set SECRET_OWM_RELAY_TOKEN (32-256 characters) in secrets.h");
+    return HTTP_CODE_SERVICE_UNAVAILABLE;
+  }
+#endif
+  printNetworkDiagnostics(getOwmEndpoint(OwmEndpointKind::REGIONAL));
 #if OWM_ONECALL_API_VERSION == 3
   return getOWMonecallV3(client, response);
 #elif OWM_ONECALL_API_VERSION == 4
@@ -583,14 +682,11 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
   sprintf(endStr, "%lld", end);
   sprintf(startStr, "%lld", start);
   String uri = "/data/2.5/air_pollution/history?lat=" + LAT + "&lon=" + LON
-               + "&start=" + startStr + "&end=" + endStr
-               + "&appid=" + OWM_APIKEY;
+               + "&start=" + startStr + "&end=" + endStr;
   // This string is printed to terminal to help with debugging. The API key is
   // censored to reduce the risk of users exposing their key.
-  String sanitizedUri = OWM_ENDPOINT +
-               "/data/2.5/air_pollution/history?lat=" + LAT + "&lon=" + LON
-               + "&start=" + startStr + "&end=" + endStr
-               + "&appid={API key}";
+  String sanitizedUri = sanitizedOwmUri(OwmEndpointKind::REGIONAL, uri);
+  appendOwmApiKey(uri);
 
   return performOwmRequest(
       client, OwmEndpointKind::REGIONAL, uri, sanitizedUri,

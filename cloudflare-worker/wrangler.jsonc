@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "esp32-openweather-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-30",
+  "workers_dev": true,
+  "preview_urls": false,
+  // First deployment offers to create this namespace. Wrangler then records
+  // its ID here; keep that ID to reuse the same last-success data on redeploy.
+  "kv_namespaces": [
+    { "binding": "WEATHER_CACHE" }
+  ],
+  "vars": {
+    "CACHE_TTL_SECONDS": "600",
+    "STALE_TTL_SECONDS": "10800",
+    "UPSTREAM_TIMEOUT_MS": "3500"
+  }
+}

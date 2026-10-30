@@ -36,7 +36,11 @@
   #include <WiFiClientSecure.h>
 #endif
 #ifdef USE_HTTPS_WITH_CERT_VERIF
-  #include "cert.h"
+  #ifdef OWM_USE_RELAY
+    #include "relay_cert.h"
+  #else
+    #include "cert.h"
+  #endif
 #endif
 
 #ifdef WEATHER_PROVIDER_CAIYUN
@@ -411,6 +415,8 @@ void setup()
     clearWiFiFailure();
   }
 
+  configureWiFiDns();
+
   // TIME SYNCHRONIZATION
   // Arduino-ESP32 keeps system time using the RTC timer during deep sleep.
   // Apply the timezone on every boot, but contact NTP only when the retained
@@ -478,7 +484,11 @@ void setup()
   client.setHandshakeTimeout(25); // seconds
 #elif defined(USE_HTTPS_WITH_CERT_VERIF)
   WiFiClientSecure client;
-  client.setCACert(cert_Sectigo_RSA_Domain_Validation_Secure_Server_CA);
+  #ifdef OWM_USE_RELAY
+    client.setCACert(cert_owm_relay_root);
+  #else
+    client.setCACert(cert_Sectigo_RSA_Domain_Validation_Secure_Server_CA);
+  #endif
   client.setHandshakeTimeout(25); // seconds
 #endif
 

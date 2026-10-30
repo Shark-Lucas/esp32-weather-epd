@@ -55,10 +55,25 @@ const unsigned long WIFI_TIMEOUT = 10000; // ms, WiFi connection timeout.
 const unsigned long WIFI_PORTAL_TIMEOUT = 180; // seconds, hard portal limit.
 const unsigned long WIFI_SAVE_CONNECT_TIMEOUT = 15; // seconds.
 const unsigned long WIFI_DOUBLE_RESET_WINDOW = 4000; // ms.
+// Measured on the device's mainland-China network. DHCP still assigns the
+// device address; only DNS is replaced after the WiFi connection succeeds.
+const IPAddress WIFI_DNS_PRIMARY(223, 5, 5, 5);       // AliDNS
+const IPAddress WIFI_DNS_SECONDARY(119, 29, 29, 29);  // DNSPod
 
 // OPENWEATHERMAP API
 // OpenWeatherMap API key, https://openweathermap.org/
-const String OWM_APIKEY   = SECRET_OWM_API_KEY;
+#ifdef OWM_USE_RELAY
+const String OWM_APIKEY = "";
+#else
+const String OWM_APIKEY = SECRET_OWM_API_KEY;
+#endif
+// The OpenWeather key stays at the Worker in relay mode. Only the independent
+// device token is sent by ESP32. Keep its value in the ignored secrets.h.
+const String OWM_RELAY_HOST = "weather.hlcoding.cn";
+#ifndef SECRET_OWM_RELAY_TOKEN
+  #define SECRET_OWM_RELAY_TOKEN ""
+#endif
+const String OWM_RELAY_TOKEN = SECRET_OWM_RELAY_TOKEN;
 // OpenWeather's official regional endpoint for users in mainland China.
 // API paths, parameters, response formats, and API keys are the same as the
 // global standard endpoint.
