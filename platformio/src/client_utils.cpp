@@ -59,8 +59,8 @@ constexpr uint32_t NETWORK_PROBE_TIMEOUT = 5000; // ms
 constexpr int32_t OWM_CONNECT_TIMEOUT = 8000;    // ms
 constexpr uint16_t OWM_RESPONSE_TIMEOUT = 10000; // ms
 constexpr uint16_t OWM_V4_DAILY_RESPONSE_TIMEOUT = 25000; // ms
-constexpr uint8_t OWM_MAX_ATTEMPTS = 2;
-constexpr uint8_t OWM_V4_DAILY_MAX_ATTEMPTS = 3;
+constexpr uint8_t OWM_MAX_ATTEMPTS = 5; // first attempt plus four retries
+constexpr uint32_t OWM_RETRY_DELAY = 3000; // ms, only between attempts
 constexpr size_t OWM_V4_PAGE_SIZE = 20;
 
 enum class OwmEndpointKind
@@ -233,10 +233,19 @@ void printLastTlsError(WiFiClientSecure &client, int httpResponse,
   const int tlsResult = client.lastError(errorBuffer, sizeof(errorBuffer));
   if (tlsResult >= 0)
   {
-    // In Arduino-ESP32 2.0.x, lastError() contains the positive socket file
-    // descriptor after a successful handshake. Do not translate it as an
-    // mbedTLS error code.
-    Serial.printf("[net] TLS handshake completed, socket: %d\n", tlsResult);
+    // A DNS failure does not update lastError(). A nonnegative value can be
+    // zero or an old socket descriptor, so it does not prove this attempt's
+    // handshake succeeded.
+    Serial.printf("[net] No new TLS error reported (raw=%d); "
+                  "check the DNS/TCP logs above\n", tlsResult);
+    return;
+  }
+  if (tlsResult == -1)
+  {
+    // The core uses -1 for several socket/setup/timeout failures. Its INFO
+    // and ERROR logs carry the actual errno or timed-out phase.
+    Serial.println("[net] Socket/TLS setup failed; "
+                   "check the core errno/timeout logs above");
     return;
   }
 
@@ -267,6 +276,39 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
   int httpResponse = 0;
   for (uint8_t attempt = 1; attempt <= maxAttempts; ++attempt)
   {
+    if (attempt > 1)
+    {
+      Serial.printf("[net] Waiting %lu ms before retry %u/%u\n",
+                    static_cast<unsigned long>(OWM_RETRY_DELAY),
+                    attempt, maxAttempts);
+      delay(OWM_RETRY_DELAY);
+    }
+    Serial.printf("[net] Request attempt %u/%u: WiFi=%d, RSSI=%d dBm, "
+                  "heap=%u, largest=%u\n",
+                  attempt, maxAttempts, static_cast<int>(WiFi.status()),
+                  WiFi.RSSI(), ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+
+#ifndef USE_HTTP
+    // Log DNS independently: WiFiClientSecure otherwise reports DNS, TCP,
+    // and TLS failures through the same HTTPClient -1 result. Its internal
+    // hostname lookup then uses the DNS cache, keeping SNI and certificate
+    // hostname verification in the normal secure-client connection path.
+    IPAddress address;
+    const unsigned long dnsStarted = millis();
+    if (!WiFi.hostByName(endpoint.c_str(), address))
+    {
+      Serial.printf("[net] DNS stage FAILED: %s (%lu ms), WiFi=%d\n",
+                    endpoint.c_str(), millis() - dnsStarted,
+                    static_cast<int>(WiFi.status()));
+      client.stop();
+      httpResponse = HTTPC_ERROR_CONNECTION_REFUSED;
+      continue;
+    }
+    Serial.printf("[net] DNS check %s -> %s (%lu ms)\n",
+                  endpoint.c_str(), address.toString().c_str(),
+                  millis() - dnsStarted);
+#endif
+
     HTTPClient http;
 #ifdef USE_HTTP
     http.begin(client, endpoint, OWM_PORT, uri);
@@ -284,6 +326,15 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
 #endif
     http.setConnectTimeout(OWM_CONNECT_TIMEOUT);
     http.setTimeout(responseTimeout);
+    // In Arduino-ESP32 2.0.x the client's setTimeout(seconds) changes socket
+    // timeouts, but leaves Stream's separate millisecond timeout at 1000.
+    // ArduinoJson reads through Stream::readBytes(), so configure that base
+    // explicitly or a brief gap between packets becomes IncompleteInput.
+    Stream &responseStream = client;
+    const unsigned long previousStreamTimeout = responseStream.getTimeout();
+    responseStream.setTimeout(responseTimeout);
+    Serial.printf("[net] Stream read timeout: %lu -> %u ms\n",
+                  previousStreamTimeout, responseTimeout);
 #ifdef OWM_USE_RELAY
     // ArduinoJson reads the raw stream. HTTP/1.0 avoids chunk framing, and
     // identity encoding avoids compressed JSON that this parser cannot read.
@@ -316,6 +367,7 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
 #endif
       const int expectedBodySize = http.getSize();
       Serial.printf("[net] HTTP response body: %d bytes\n", expectedBodySize);
+      const unsigned long parsingStarted = millis();
       const DeserializationError jsonError = parser(http.getStream());
       if (!jsonError)
       {
@@ -328,9 +380,11 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
       // -100 offset distinguishes JSON/schema errors from HTTPClient errors.
       httpResponse = -100 - static_cast<int>(jsonError.code());
       Serial.printf("[owm] JSON/schema error: %s; expected=%d, "
-                    "remaining=%d, connected=%d\n",
+                    "remaining=%d, connected=%d, elapsed=%lu ms, "
+                    "stream-timeout=%lu ms\n",
                     jsonError.c_str(), expectedBodySize,
-                    client.available(), client.connected());
+                    client.available(), client.connected(),
+                    millis() - parsingStarted, responseStream.getTimeout());
     }
 
     client.stop();
@@ -600,7 +654,7 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
       [&response, &alertIds, &dailyRecords](WiFiClient &stream) {
         return deserializeOneCallV4Daily(
             stream, response, dailyRecords, alertIds);
-      }, OWM_V4_DAILY_RESPONSE_TIMEOUT, OWM_V4_DAILY_MAX_ATTEMPTS);
+      }, OWM_V4_DAILY_RESPONSE_TIMEOUT);
   if (status != HTTP_CODE_OK)
   {
     return status;
