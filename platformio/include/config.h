@@ -289,6 +289,7 @@ extern const uint8_t PIN_BME_SCL;
 extern const uint8_t PIN_BME_PWR;
 extern const uint8_t BME_ADDRESS;
 extern const unsigned long WIFI_TIMEOUT;
+extern const uint8_t WIFI_MAX_RECONNECT_ATTEMPTS;
 extern const unsigned long WIFI_PORTAL_TIMEOUT;
 extern const unsigned long WIFI_SAVE_CONNECT_TIMEOUT;
 extern const unsigned long WIFI_DOUBLE_RESET_WINDOW;

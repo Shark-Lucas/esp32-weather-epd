@@ -255,6 +255,16 @@ When setup starts, the E-Paper display shows a temporary access point named `EPD
 
 Failure screens show both the detected reason and the supported next actions. To reduce E-Paper wear, an unchanged WiFi failure is not redrawn on every scheduled retry; the display updates when the failure type changes or when setup finishes with a result.
 
+Saved-network connection failures and WiFi drops during OpenWeather requests
+actively reconnect using the saved credentials. Each wake cycle allows up to
+`WIFI_MAX_RECONNECT_ATTEMPTS` (default: 20) active reconnects, with up to
+`WIFI_TIMEOUT` (10 seconds) per attempt and 3 seconds between attempts. Success
+restores the preferred DNS settings before API requests resume. These WiFi
+attempts have a shared limit across the wake cycle; the separate HTTP retry
+limit remains five. Failure pages show the actual WiFi reconnect count.
+Run `python platformio/test/check_wifi_reconnect.py` to check the recovery helper
+on a host without resetting hardware.
+
 ### OpenWeatherMap API Key
 
 Sign up here to get an API key; it's free. <https://openweathermap.org/api>
@@ -289,9 +299,13 @@ Here's how to subscribe and avoid any credit card changes:
 
 ### Cloudflare Worker Relay
 
-An optional authenticated OpenWeather relay with KV caching is provided in
+An optional authenticated OpenWeather relay with scheduled KV snapshots is provided in
 [`cloudflare-worker/`](cloudflare-worker/README.md). The Chinese deployment guide
-covers dashboard and Wrangler setup, Secrets, custom domains, and verification.
+covers SQLite Durable Object setup, optional OW budget configuration, deployment,
+and verification. Every 15 minutes the backend fetches complete per-location
+data and publishes all locations in one KV value. Ordinary device reads do not
+fetch OpenWeather or write KV. New locations are queued once; the firmware can
+wait up to 120 seconds for the first snapshot without consuming network retries.
 The OpenWeather firmware now defaults to verified HTTPS through the configured
 relay. Set `SECRET_OWM_RELAY_TOKEN` in the ignored `platformio/include/secrets.h`
 to match the Worker's `DEVICE_TOKEN`. Comment out `OWM_USE_RELAY` in `config.h`
@@ -313,7 +327,9 @@ This screen distinguishes missing saved credentials, unavailable networks, rejec
 
 ### API Error
 <img src="showcase/demo-error-api.jpg" align="left" width="25%" />
-This error screen appears if an error (client or server) occurs when making an API request to OpenWeatherMap. The second line will give the error code followed by a descriptor phrase. Positive error codes correspond to HTTP response status codes, while error codes <= 0 indicate a client(esp32) error. The esp32 will retry once every SLEEP_DURATION (default = 30min).
+This error screen appears if an error (client or server) occurs when making an API request to OpenWeatherMap. It shows the detected failure reason, raw HTTP/JSON/TLS codes, duration of the last attempt, failed weather endpoint, and attempt count. The error page remains visible during deep sleep, so these details can be read without a serial connection. Positive HTTP codes describe server responses; negative codes describe device-side connection or parsing failures. The esp32 will retry once every SLEEP_DURATION (default = 30min).
+
+`-1 / Connection refused` is a generic connection failure and does not prove that the server refused TCP or that OpenWeather timed out. The relay identifies upstream timeouts separately through `X-Weather-Error`; see the [relay diagnostics guide](cloudflare-worker/README.md#api-与首次启动).
 <br/><br/>
 In the example shown to the left, "401: Unauthorized" may be the result of an incorrect API key or that you are attempting to use the One Call v3 API without the proper account setup.
 

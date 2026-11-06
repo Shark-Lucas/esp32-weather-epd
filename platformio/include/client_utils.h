@@ -28,10 +28,19 @@
 #endif
 
 wl_status_t startWiFi(int &wifiRSSI);
+uint8_t getWiFiReconnectAttempts();
 void configureWiFiDns();
 void killWiFi();
 bool waitForSNTPSync(tm *timeInfo);
 bool printLocalTime(tm *timeInfo);
+// Retained after networking is stopped, for the persistent E-Paper error page.
+struct OwmRequestError
+{
+  String reason;
+  String detail;
+  String context;
+};
+const OwmRequestError &getLastOwmRequestError();
 #ifdef USE_HTTP
   int getOWMonecall(WiFiClient &client, owm_resp_onecall_t &r);
   int getOWMairpollution(WiFiClient &client, owm_resp_air_pollution_t &r);

@@ -177,7 +177,10 @@ void showWiFiFailureScreen(WiFiFailureReason reason,
   {
     action2 = "";
   }
-  showActionScreen(icon, title, detail, action1, action2);
+  const String reconnects = getWiFiReconnectAttempts() > 0
+                         ? "WiFi " + String(getWiFiReconnectAttempts()) + "/"
+                           + String(WIFI_MAX_RECONNECT_ATTEMPTS) : "";
+  showActionScreen(icon, title, detail, reconnects, action1, action2);
 }
 
 /* Put esp32 into ultra low-power deep sleep (<11μA).
@@ -507,11 +510,22 @@ void setup()
     statusStr = "Caiyun Weather API";
 #endif
     tmpStr = String(rxStatus, DEC) + ": " + getHttpResponsePhrase(rxStatus);
+#ifdef WEATHER_PROVIDER_OPENWEATHER
+    const OwmRequestError &failure = getLastOwmRequestError();
+    showActionScreen(wi_cloud_down_128x128,
+                     statusStr,
+                     failure.reason.isEmpty() ? tmpStr : failure.reason,
+                     failure.detail,
+                     failure.context,
+                     TXT_RESET_TO_RETRY,
+                     TXT_RETRY_NEXT_UPDATE);
+#else
     showActionScreen(wi_cloud_down_128x128,
                      statusStr,
                      tmpStr,
                      TXT_RESET_TO_RETRY,
                      TXT_RETRY_NEXT_UPDATE);
+#endif
     beginDeepSleep(startTime, &timeInfo);
     return;
   }
@@ -524,9 +538,12 @@ void setup()
     killWiFi();
     statusStr = "Air Pollution API";
     tmpStr = String(rxStatus, DEC) + ": " + getHttpResponsePhrase(rxStatus);
+    const OwmRequestError &failure = getLastOwmRequestError();
     showActionScreen(wi_cloud_down_128x128,
                      statusStr,
-                     tmpStr,
+                     failure.reason.isEmpty() ? tmpStr : failure.reason,
+                     failure.detail,
+                     failure.context,
                      TXT_RESET_TO_RETRY,
                      TXT_RETRY_NEXT_UPDATE);
     beginDeepSleep(startTime, &timeInfo);

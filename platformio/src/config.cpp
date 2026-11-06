@@ -52,6 +52,7 @@ const uint8_t BME_ADDRESS = 0x76; // If sensor does not work, try 0x77
 
 // WIFI
 const unsigned long WIFI_TIMEOUT = 10000; // ms, WiFi connection timeout.
+const uint8_t WIFI_MAX_RECONNECT_ATTEMPTS = 20; // shared across one wake cycle.
 const unsigned long WIFI_PORTAL_TIMEOUT = 180; // seconds, hard portal limit.
 const unsigned long WIFI_SAVE_CONNECT_TIMEOUT = 15; // seconds.
 const unsigned long WIFI_DOUBLE_RESET_WINDOW = 4000; // ms.

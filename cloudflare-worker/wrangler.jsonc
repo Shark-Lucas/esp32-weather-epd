@@ -1,18 +1,31 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "esp32-openweather-relay",
+  "name": "weather",
+  "account_id": "7ebc6d3ef920826928e4a25ce83b4c25",
   "main": "src/index.js",
   "compatibility_date": "2026-10-30",
   "workers_dev": true,
   "preview_urls": false,
-  // First deployment offers to create this namespace. Wrangler then records
-  // its ID here; keep that ID to reuse the same last-success data on redeploy.
+  "routes": [{ "pattern": "weather.hlcoding.cn", "custom_domain": true }],
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "durable_objects": {
+    "bindings": [{ "name": "WEATHER_COORDINATOR", "class_name": "WeatherCoordinator" }]
+  },
+  "migrations": [{ "tag": "weather-snapshot-v2", "new_sqlite_classes": ["WeatherCoordinator"] }],
+  "observability": { "enabled": true, "issues": { "enabled": true }, "traces": { "enabled": true } },
+  // Reuse the existing production namespace; preserve the old per-API keys.
   "kv_namespaces": [
-    { "binding": "WEATHER_CACHE" }
+    { "binding": "WEATHER_CACHE", "id": "ca8ed84c489447318ffb6b7a22387f07" }
   ],
   "vars": {
-    "CACHE_TTL_SECONDS": "600",
+    "CACHE_TTL_SECONDS": "900",
     "STALE_TTL_SECONDS": "10800",
-    "UPSTREAM_TIMEOUT_MS": "3500"
+    "UPSTREAM_TIMEOUT_MS": "5000",
+    // Owner opted out of local OW quota enforcement; 429 cooldown is retained.
+    "OWM_BUDGET_ENFORCED": "false",
+    "OWM_BUDGET_CONFIRMED": "false",
+    "OWM_BUDGET_UNIT": "request",
+    "OWM_BUDGET_RESET_UTC_HOUR": "0",
+    "OWM_DAILY_BUDGET": "0"
   }
 }

@@ -104,3 +104,8 @@ What does this script do?
 
 The fonts used for this project could be swapped out relatively easily if
 desired.
+
+Check the Chinese request-error page against the generated 16pt bitmap font:
+  python fonts/check_error_screen.py
+Pass an output directory to also render sample 800x480 and 640x384 PNGs.
+This checks glyph coverage and text bounds, not the physical display driver.

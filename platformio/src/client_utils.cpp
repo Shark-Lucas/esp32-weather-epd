@@ -42,9 +42,13 @@
 #include "client_utils.h"
 #include "config.h"
 #include "display_utils.h"
+#include "icons/icons_128x128.h"
 #include "renderer.h"
+#include "relay_warmup.h"
 #ifndef USE_HTTP
   #include <WiFiClientSecure.h>
+  #include <mbedtls/ssl.h>
+  #include <mbedtls/x509.h>
 #endif
 
 #ifdef USE_HTTP
@@ -63,6 +67,130 @@ constexpr uint8_t OWM_MAX_ATTEMPTS = 5; // first attempt plus four retries
 constexpr uint32_t OWM_RETRY_DELAY = 3000; // ms, only between attempts
 constexpr size_t OWM_V4_PAGE_SIZE = 20;
 
+OwmRequestError lastOwmRequestError;
+
+#define OWM_UI_LOCALE_STRING_(value) #value
+#define OWM_UI_LOCALE_STRING(value) OWM_UI_LOCALE_STRING_(value)
+const char *errorText(const char *english, const char *chinese)
+{
+  // UI locale and upstream weather language are intentionally independent.
+  return std::strcmp(OWM_UI_LOCALE_STRING(LOCALE), "zh_CN") == 0
+       ? chinese : english;
+}
+#undef OWM_UI_LOCALE_STRING
+#undef OWM_UI_LOCALE_STRING_
+
+const char *requestName(const String &uri)
+{
+  if (uri.startsWith("/data/2.5/air_pollution"))
+    return errorText("Air quality", "空气质量");
+  if (uri.startsWith("/data/4.0/onecall/timeline/1day"))
+    return errorText("Daily forecast", "每日预报");
+  if (uri.startsWith("/data/4.0/onecall/timeline/1h"))
+    return errorText("Hourly forecast", "小时预报");
+  if (uri.startsWith("/data/4.0/onecall/alert/"))
+    return errorText("Weather alert", "天气告警");
+  if (uri.startsWith("/data/3.0/onecall"))
+    return errorText("Weather forecast", "天气预报");
+  return errorText("Current weather", "实时天气");
+}
+
+void recordRequestError(const String &reason, const String &raw,
+                        unsigned long elapsed, const String &uri,
+                        uint8_t attempt, uint8_t maxAttempts)
+{
+  lastOwmRequestError.reason = reason;
+  lastOwmRequestError.detail = raw + " / " + String(elapsed / 1000.0f, 1) + "s";
+#ifdef OWM_USE_RELAY
+  lastOwmRequestError.context = String("CF / ");
+#else
+  lastOwmRequestError.context = String("OW / ");
+#endif
+  lastOwmRequestError.context += String(requestName(uri)) + " / "
+                            + String(attempt) + "/" + String(maxAttempts);
+}
+
+String requestFailureReason(int status, const String &relayError)
+{
+#ifdef OWM_USE_RELAY
+  if (relayError == "snapshot_warming")
+    return errorText("Weather cache preparing", "天气缓存准备中");
+  if (relayError == "snapshot_warmup_timeout")
+    return errorText("Weather cache preparation timed out", "天气缓存准备超时");
+  if (relayError == "snapshot_expired")
+    return errorText("Weather cache expired", "天气缓存已过期");
+  if (relayError == "snapshot_range_unavailable")
+    return errorText("Weather cache range unavailable", "天气缓存范围不足");
+  if (relayError == "upstream_budget_exhausted" || relayError == "upstream_budget_insufficient")
+    return errorText("OW daily budget insufficient", "OW 每日额度不足");
+  if (relayError == "upstream_budget_not_configured" || relayError == "upstream_budget_unit_changed")
+    return errorText("OW budget needs configuration", "OW 额度配置未完成");
+  if (relayError == "location_capacity_reached")
+    return errorText("Weather location limit reached", "天气位置数量已满");
+  if (relayError == "kv_unavailable" || relayError == "snapshot_invalid"
+      || relayError == "snapshot_publish_failed" || relayError == "snapshot_too_large")
+    return errorText("CF weather cache unavailable", "CF 天气缓存不可用");
+  if (relayError == "upstream_timeout")
+    return errorText("CF to OW timed out", "CF 请求 OW 超时");
+  if (relayError == "upstream_fetch_failed")
+    return errorText("CF to OW connection failed", "CF 连接 OW 失败");
+  if (relayError == "upstream_invalid_payload")
+    return errorText("OW returned invalid data", "OW 响应数据异常");
+  if (relayError == "unauthorized")
+    return errorText("Invalid device token", "CF 设备口令无效");
+  if (relayError == "worker_not_configured" || relayError == "invalid_worker_configuration")
+    return errorText("CF configuration error", "CF 代理配置错误");
+  if (relayError == "upstream_http_401")
+    return errorText("Invalid OW API key", "OW 密钥无效");
+  if (relayError == "upstream_http_403")
+    return errorText("OW access denied", "OW 接口权限不足");
+  if (relayError == "upstream_http_429")
+    return errorText("OW rate/quota limit", "OW 请求额度受限");
+#else
+  (void)relayError;
+#endif
+  switch (status)
+  {
+  case HTTPC_ERROR_CONNECTION_REFUSED:
+#ifdef OWM_USE_RELAY
+    return errorText("CF TCP/TLS connection failed", "CF 连接失败(TCP/TLS)");
+#else
+    return errorText("OW TCP/TLS connection failed", "OW 连接失败(TCP/TLS)");
+#endif
+  case HTTPC_ERROR_READ_TIMEOUT:
+#ifdef OWM_USE_RELAY
+    return errorText("Waiting for CF timed out", "等待 CF 响应超时");
+#else
+    return errorText("Waiting for OW timed out", "等待 OW 响应超时");
+#endif
+  case HTTPC_ERROR_CONNECTION_LOST:
+    return errorText("Response connection lost", "读取响应时连接断开");
+  case HTTPC_ERROR_TOO_LESS_RAM:
+    return errorText("Not enough memory", "设备内存不足");
+  case -100 - DeserializationError::EmptyInput:
+  case -100 - DeserializationError::IncompleteInput:
+    return errorText("Weather data incomplete", "天气数据接收不完整");
+  case -100 - DeserializationError::InvalidInput:
+    return errorText("Invalid weather data", "天气数据格式异常");
+  case -100 - DeserializationError::NoMemory:
+    return errorText("Not enough memory for JSON", "解析天气时内存不足");
+  case 401:
+    return errorText("Request authentication failed", "请求鉴权失败");
+  case 403:
+    return errorText("API access denied", "接口拒绝访问");
+  case 429:
+    return errorText("Request rate/quota limit", "请求额度受限");
+  case 502:
+    return errorText("Proxy or upstream failure", "代理或上游响应异常");
+  case 504:
+    return errorText("Proxy or upstream timeout", "代理或上游响应超时");
+  default:
+    // Old deployments have no diagnostic header. Never infer an OW timeout
+    // from a generic CF 502/504 or copy an untrusted response body to screen.
+    return getHttpResponsePhrase(status);
+  }
+}
+
 enum class OwmEndpointKind
 {
   REGIONAL,
@@ -73,6 +201,47 @@ IPAddress owmRegionalResolvedIP;
 IPAddress owmGlobalResolvedIP;
 bool owmRegionalAddressReady = false;
 bool owmGlobalAddressReady = false;
+uint8_t wifiReconnectAttempts = 0;
+
+bool reconnectWiFi(uint32_t totalTimeout = UINT32_MAX)
+{
+  if (WiFi.status() == WL_CONNECTED) return true;
+  const uint32_t started = millis();
+  while (wifiReconnectAttempts < WIFI_MAX_RECONNECT_ATTEMPTS
+         && millis() - started < totalTimeout)
+  {
+    if (WiFi.status() == WL_CONNECTED) break;
+    if (wifiReconnectAttempts > 0)
+    {
+      delay(std::min<uint32_t>(OWM_RETRY_DELAY, totalTimeout - (millis() - started)));
+      if (WiFi.status() == WL_CONNECTED) break;
+      if (millis() - started >= totalTimeout) return false;
+    }
+    ++wifiReconnectAttempts;
+    const unsigned long attemptStarted = millis();
+    const bool requested = WiFi.reconnect();
+    if (!requested) WiFi.begin(); // Reload saved NVS config if reconnect could not start.
+    Serial.printf("[net] WiFi reconnect %u/%u: requested=%d\n",
+                  wifiReconnectAttempts, WIFI_MAX_RECONNECT_ATTEMPTS, requested);
+    while (WiFi.status() != WL_CONNECTED
+           && millis() - attemptStarted < WIFI_TIMEOUT
+           && millis() - started < totalTimeout)
+    {
+      delay(std::min<uint32_t>(50, totalTimeout - (millis() - started)));
+    }
+    Serial.printf("[net] WiFi reconnect %u/%u: status=%d (%lu ms)\n",
+                  wifiReconnectAttempts, WIFI_MAX_RECONNECT_ATTEMPTS,
+                  static_cast<int>(WiFi.status()), millis() - attemptStarted);
+    if (WiFi.status() == WL_CONNECTED) break;
+  }
+  if (WiFi.status() != WL_CONNECTED) return false;
+  owmRegionalAddressReady = false;
+  owmGlobalAddressReady = false;
+  configureWiFiDns(); // DHCP can replace preferred DNS during reconnection.
+  Serial.printf("[net] WiFi recovered after %u/%u reconnects, RSSI=%d dBm\n",
+                wifiReconnectAttempts, WIFI_MAX_RECONNECT_ATTEMPTS, WiFi.RSSI());
+  return true;
+}
 
 const String &getOwmEndpoint(OwmEndpointKind kind)
 {
@@ -272,16 +441,46 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
   const String &endpoint = getOwmEndpoint(endpointKind);
   Serial.print(TXT_ATTEMPTING_HTTP_REQ);
   Serial.println(": " + sanitizedUri);
+#ifndef USE_HTTP
+  client.setHandshakeTimeout(25);
+#endif
 
   int httpResponse = 0;
+  RelayWarmup warmup;
+  bool warmingPoll = false;
   for (uint8_t attempt = 1; attempt <= maxAttempts; ++attempt)
   {
-    if (attempt > 1)
+    if (warmup.active() && warmup.remaining(millis()) == 0)
+    {
+      recordRequestError(requestFailureReason(503, "snapshot_warmup_timeout"),
+                         "HTTP 503", RelayWarmup::LIMIT_MS, uri,
+                         attempt, maxAttempts);
+      return HTTP_CODE_SERVICE_UNAVAILABLE;
+    }
+    if (attempt > 1 && !warmingPoll)
     {
       Serial.printf("[net] Waiting %lu ms before retry %u/%u\n",
                     static_cast<unsigned long>(OWM_RETRY_DELAY),
                     attempt, maxAttempts);
       delay(OWM_RETRY_DELAY);
+    }
+    warmingPoll = false;
+    lastOwmRequestError = {};
+    const unsigned long attemptStarted = millis();
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      client.stop();
+      if (!reconnectWiFi(warmup.active() ? warmup.remaining(millis()) : UINT32_MAX))
+      {
+        httpResponse = HTTPC_ERROR_NOT_CONNECTED;
+        const String reason = warmup.active() && warmup.remaining(millis()) == 0
+                            ? requestFailureReason(503, "snapshot_warmup_timeout")
+                            : errorText("WiFi reconnect failed", "WiFi 重连失败");
+        recordRequestError(reason, "WiFi " + String(wifiReconnectAttempts)
+                           + "/" + String(WIFI_MAX_RECONNECT_ATTEMPTS) + " / -4",
+                           millis() - attemptStarted, uri, attempt, maxAttempts);
+        return httpResponse; // The shared WiFi budget is spent; do not just poll five more times.
+      }
     }
     Serial.printf("[net] Request attempt %u/%u: WiFi=%d, RSSI=%d dBm, "
                   "heap=%u, largest=%u\n",
@@ -302,6 +501,9 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
                     static_cast<int>(WiFi.status()));
       client.stop();
       httpResponse = HTTPC_ERROR_CONNECTION_REFUSED;
+      recordRequestError(errorText("DNS lookup failed", "DNS 解析失败"),
+                         "HTTP -1 / DNS", millis() - attemptStarted,
+                         uri, attempt, maxAttempts);
       continue;
     }
     Serial.printf("[net] DNS check %s -> %s (%lu ms)\n",
@@ -315,6 +517,9 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
     if (!connectOwmHttpTransport(client, endpointKind, responseTimeout))
     {
       httpResponse = HTTPC_ERROR_CONNECTION_REFUSED;
+      recordRequestError(errorText("TCP connection failed", "TCP 连接失败"),
+                         "HTTP -1", millis() - attemptStarted,
+                         uri, attempt, maxAttempts);
       http.end();
       Serial.printf("[net] HTTP attempt %u: transport unavailable\n", attempt);
       Serial.println("  " + String(httpResponse, DEC) + " "
@@ -324,17 +529,30 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
 #else
     http.begin(client, endpoint, OWM_PORT, uri, true);
 #endif
-    http.setConnectTimeout(OWM_CONNECT_TIMEOUT);
-    http.setTimeout(responseTimeout);
+    const uint32_t remaining = warmup.remaining(millis());
+    if (remaining == 0)
+    {
+      recordRequestError(requestFailureReason(503, "snapshot_warmup_timeout"),
+                         "HTTP 503", RelayWarmup::LIMIT_MS, uri,
+                         attempt, maxAttempts);
+      client.stop(); http.end();
+      return HTTP_CODE_SERVICE_UNAVAILABLE;
+    }
+    const uint16_t readTimeout = std::min<uint32_t>(responseTimeout, remaining);
+    http.setConnectTimeout(std::min<uint32_t>(OWM_CONNECT_TIMEOUT, remaining));
+    http.setTimeout(readTimeout);
+#ifndef USE_HTTP
+    if (warmup.active()) client.setHandshakeTimeout(std::max<uint32_t>(1, std::min<uint32_t>(25, remaining / 1000)));
+#endif
     // In Arduino-ESP32 2.0.x the client's setTimeout(seconds) changes socket
     // timeouts, but leaves Stream's separate millisecond timeout at 1000.
     // ArduinoJson reads through Stream::readBytes(), so configure that base
     // explicitly or a brief gap between packets becomes IncompleteInput.
     Stream &responseStream = client;
     const unsigned long previousStreamTimeout = responseStream.getTimeout();
-    responseStream.setTimeout(responseTimeout);
+    responseStream.setTimeout(readTimeout);
     Serial.printf("[net] Stream read timeout: %lu -> %u ms\n",
-                  previousStreamTimeout, responseTimeout);
+                  previousStreamTimeout, readTimeout);
 #ifdef OWM_USE_RELAY
     // ArduinoJson reads the raw stream. HTTP/1.0 avoids chunk framing, and
     // identity encoding avoids compressed JSON that this parser cannot read.
@@ -342,9 +560,10 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
     http.addHeader("Accept-Encoding", "identity");
     http.addHeader("Authorization", "Bearer " + OWM_RELAY_TOKEN);
     const char *relayHeaders[] = {
-      "X-Weather-Cache", "X-Weather-Fetched-At", "Age"
+      "X-Weather-Cache", "X-Weather-Fetched-At", "Age", "X-Weather-Error",
+      "Server-Timing", "Retry-After"
     };
-    http.collectHeaders(relayHeaders, 3);
+    http.collectHeaders(relayHeaders, 6);
 #endif
 
     const unsigned long requestStarted = millis();
@@ -357,6 +576,61 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
                   attempt, httpResponse, requestElapsed);
 #endif
 
+#ifdef OWM_USE_RELAY
+    if (httpResponse == HTTP_CODE_SERVICE_UNAVAILABLE
+        && http.header("X-Weather-Error") == "snapshot_warming")
+    {
+      const bool firstWait = !warmup.active();
+      warmup.begin(millis());
+      const int retryAfter = http.header("Retry-After").toInt();
+      recordRequestError(requestFailureReason(httpResponse, "snapshot_warming"),
+                         "HTTP 503", RelayWarmup::LIMIT_MS - warmup.remaining(millis()),
+                         uri, attempt, maxAttempts);
+      client.stop(); http.end();
+      if (firstWait)
+      {
+        // One persistent preparing page; do not refresh E-Paper every poll.
+        initDisplay();
+        do
+        {
+          drawActionScreen(wi_cloud_down_128x128,
+                           requestFailureReason(503, "snapshot_warming"),
+                           requestName(uri),
+                           errorText("Waiting up to 120s", "最多等待120秒"));
+        } while (display.nextPage());
+        powerOffDisplay();
+      }
+      const uint32_t waitMs = warmup.pollDelay(millis(), retryAfter);
+      Serial.printf("[relay] Snapshot preparing; polling in %lu ms\n",
+                    static_cast<unsigned long>(waitMs));
+      delay(waitMs);
+      warmingPoll = true;
+      --attempt; // A warming response does not consume a network retry.
+      continue;
+    }
+#endif
+
+    String reason = requestFailureReason(httpResponse,
+                                         http.header("X-Weather-Error"));
+    String rawError = "HTTP " + String(httpResponse);
+#ifndef USE_HTTP
+    if (httpResponse == HTTPC_ERROR_CONNECTION_REFUSED)
+    {
+      char tlsMessage[1] = {};
+      const int tlsError = client.lastError(tlsMessage, sizeof(tlsMessage));
+      if (tlsError < 0)
+      {
+        rawError += " / TLS " + String(tlsError);
+        if (tlsError == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED)
+          reason = errorText("TLS certificate rejected", "TLS 证书校验失败");
+        else if (tlsError == MBEDTLS_ERR_SSL_TIMEOUT)
+          reason = errorText("TLS handshake timed out", "TLS 握手超时");
+        else if (tlsError < -1)
+          reason = errorText("TLS handshake failed", "TLS 握手失败");
+      }
+    }
+#endif
+
     if (httpResponse == HTTP_CODE_OK)
     {
 #ifdef OWM_USE_RELAY
@@ -364,6 +638,7 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
                     http.header("X-Weather-Cache").c_str(),
                     http.header("X-Weather-Fetched-At").c_str(),
                     http.header("Age").c_str());
+      Serial.printf("[relay] timing=%s\n", http.header("Server-Timing").c_str());
 #endif
       const int expectedBodySize = http.getSize();
       Serial.printf("[net] HTTP response body: %d bytes\n", expectedBodySize);
@@ -373,12 +648,18 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
       {
         client.stop();
         http.end();
+        lastOwmRequestError = {};
+#ifndef USE_HTTP
+        client.setHandshakeTimeout(25);
+#endif
         Serial.println("  200 OK");
         return HTTP_CODE_OK;
       }
 
       // -100 offset distinguishes JSON/schema errors from HTTPClient errors.
       httpResponse = -100 - static_cast<int>(jsonError.code());
+      reason = requestFailureReason(httpResponse, "");
+      rawError = "JSON " + String(httpResponse);
       Serial.printf("[owm] JSON/schema error: %s; expected=%d, "
                     "remaining=%d, connected=%d, elapsed=%lu ms, "
                     "stream-timeout=%lu ms\n",
@@ -387,6 +668,8 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
                     millis() - parsingStarted, responseStream.getTimeout());
     }
 
+    recordRequestError(reason, rawError, millis() - attemptStarted,
+                       uri, attempt, maxAttempts);
     client.stop();
     http.end();
     Serial.println("  " + String(httpResponse, DEC) + " "
@@ -395,6 +678,16 @@ int performOwmRequest(OwmNetworkClient &client, OwmEndpointKind endpointKind,
   return httpResponse;
 }
 } // namespace
+
+const OwmRequestError &getLastOwmRequestError()
+{
+  return lastOwmRequestError;
+}
+
+uint8_t getWiFiReconnectAttempts()
+{
+  return wifiReconnectAttempts;
+}
 
 /* Power-on and connect WiFi.
  * Takes int parameter to store WiFi RSSI, or “Received Signal Strength
@@ -420,6 +713,12 @@ wl_status_t startWiFi(int &wifiRSSI)
     connection_status = WiFi.status();
   }
   Serial.println();
+
+  if (connection_status != WL_CONNECTED)
+  {
+    reconnectWiFi();
+    connection_status = WiFi.status();
+  }
 
   if (connection_status == WL_CONNECTED)
   {
@@ -640,6 +939,11 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
   {
     Serial.printf("[owm4] Insufficient hourly records: %u/%d\n",
                   static_cast<unsigned>(hourlyRecords), HOURLY_GRAPH_MAX);
+    lastOwmRequestError = {
+      errorText("Hourly forecast incomplete", "小时预报数据不足"),
+      String(hourlyRecords) + "/" + String(requiredHourlyRecords),
+      errorText("Hourly forecast validation", "小时预报校验")
+    };
     return -100 - static_cast<int>(DeserializationError::InvalidInput);
   }
 
@@ -702,6 +1006,10 @@ int getOWMonecallV4(OwmNetworkClient &client, owm_resp_onecall_t &response)
   if (OWM_RELAY_TOKEN.length() < 32 || OWM_RELAY_TOKEN.length() > 256)
   {
     Serial.println("[relay] Set SECRET_OWM_RELAY_TOKEN (32-256 characters) in secrets.h");
+    lastOwmRequestError = {
+      errorText("Device token not configured", "设备口令未正确配置"),
+      "HTTP 503", errorText("Device configuration", "设备配置")
+    };
     return HTTP_CODE_SERVICE_UNAVAILABLE;
   }
 #endif
